@@ -1,0 +1,17 @@
+[package]
+name = "vulkan_3d_framework"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+vulkano = "0.35"
+log = "0.4"
+pretty_env_logger = "0.5"
+vulkano-shaders = "0.35"
+winit = "0.30"
+obj-rs = { git = "https://github.com/simnalamburt/obj-rs", rev = "62455dd", features = ["vulkano"] }
+glam = "0.33"
+egui = "0.31"
+egui_winit_vulkano = { git = "https://github.com/tsvdh/egui_winit_vulkano.git", branch = "master" }
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
