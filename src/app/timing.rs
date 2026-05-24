@@ -1,13 +1,16 @@
+use crate::app::logic::LogicItems;
+use crate::app::util::InitOption;
+use log::info;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
-use std::sync::{Arc, Mutex, MutexGuard};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
-use log::info;
-use vulkan_3d_framework::InitOption;
-use crate::{GpuFence};
-use crate::logic::LogicItems;
+use vulkano::sync::future::FenceSignalFuture;
+use vulkano::sync::GpuFuture;
+
+type GpuFence = FenceSignalFuture<Box<dyn GpuFuture + Send>>;
 
 pub struct TimingItems {
     pub show_frame_times: bool,

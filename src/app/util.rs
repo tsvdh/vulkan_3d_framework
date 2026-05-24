@@ -1,12 +1,12 @@
+use log::{debug, error, info, warn};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use log::{debug, error, info, warn};
 use vulkano::buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo};
 use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::device::physical::PhysicalDeviceType;
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo, QueueFlags};
-use vulkano::device::physical::{PhysicalDeviceType};
 use vulkano::instance::debug::{DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger, DebugUtilsMessengerCallback, DebugUtilsMessengerCreateInfo};
 use vulkano::instance::{Instance, InstanceCreateInfo, InstanceExtensions};
 use vulkano::memory::allocator::{MemoryTypeFilter, StandardMemoryAllocator};
@@ -20,9 +20,9 @@ const DEFAULT_INSTANCE_EXTENSIONS: InstanceExtensions = InstanceExtensions {
 const LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
 
 pub struct CommonItems {
-    pub library: Arc<VulkanLibrary>,
+    pub _library: Arc<VulkanLibrary>,
     pub instance: Arc<Instance>,
-    pub debug_callback: DebugUtilsMessenger,
+    pub _debug_callback: DebugUtilsMessenger,
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
     pub memory_allocator: Arc<StandardMemoryAllocator>,
@@ -143,9 +143,9 @@ pub fn get_common_vulkan_items(instance_extensions: Option<InstanceExtensions>,
     ));
 
     CommonItems {
-        library,
+        _library: library,
         instance,
-        debug_callback,
+        _debug_callback: debug_callback,
         device,
         queue,
         memory_allocator,

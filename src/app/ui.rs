@@ -1,6 +1,6 @@
-use crate::rendering::RenderItems;
+use crate::app::rendering::RenderItems;
+use crate::app::util::CommonItems;
 use egui_winit_vulkano::{Gui, GuiConfig};
-use vulkan_3d_framework::CommonItems;
 use vulkano::image::SampleCount;
 use winit::event_loop::ActiveEventLoop;
 

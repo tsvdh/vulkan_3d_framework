@@ -1,7 +1,7 @@
-use crate::rendering::RenderItems;
-use crate::shader_modules::fragment_shader_module::FragmentData;
-use crate::shader_modules::vertex_shader_module::VertexData;
-use crate::timing::TimingItems;
+use crate::app::rendering::RenderItems;
+use crate::app::shader_modules::fragment_shader_module::FragmentData;
+use crate::app::shader_modules::vertex_shader_module::VertexData;
+use crate::app::timing::TimingItems;
 use glam::{Mat4, Vec3};
 use std::collections::BTreeSet;
 use std::f32::consts::FRAC_PI_2;
