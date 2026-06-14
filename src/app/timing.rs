@@ -9,18 +9,24 @@ use std::thread;
 use std::time::{Duration, Instant};
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
+use crate::app::Config;
 
 type GpuFence = FenceSignalFuture<Box<dyn GpuFuture + Send>>;
 
 pub struct TimingItems {
-    pub show_frame_times: bool,
+    // public
     pub frame_component_durations: FrameComponentDurations,
 
+    // configuration
+    pub show_frame_times: bool,
+
+    // access through methods
     frame_render_end: Arc<Mutex<Option<GpuFence>>>,
     async_logic_prod: InitOption<Sender<()>>,
     render_gpu_start: Arc<Mutex<Instant>>,
     async_cpu_start: Arc<Mutex<Instant>>,
 
+    // private
     frame_start_moments: VecDeque<Instant>,
     min_frame_duration: Duration,
     main_thread_cons: InitOption<Receiver<(AsynchronousTask, Duration)>>,
@@ -58,7 +64,7 @@ impl TimingItems {
         self.async_cpu_start.lock().unwrap()
     }
 
-    pub fn new() -> Self {
+    pub fn new(config: &Config) -> Self {
         let now = Instant::now();
 
         let min_frame_duration = Duration::from_secs_f32(1.0 / 60.0);
@@ -73,7 +79,7 @@ impl TimingItems {
             async_cpu_start: Arc::new(Mutex::new(now)),
             frame_start_moments,
             min_frame_duration,
-            show_frame_times: true,
+            show_frame_times: config.show_frame_times,
             async_logic_prod: InitOption::none(),
             main_thread_cons: InitOption::none(),
         };

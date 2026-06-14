@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use log::{debug, error, info, warn};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use vulkano::instance::{Instance, InstanceCreateInfo, InstanceExtensions};
 use vulkano::memory::allocator::{MemoryTypeFilter, StandardMemoryAllocator};
 use vulkano::VulkanLibrary;
 use winit::event_loop::EventLoop;
+use crate::app::scene::{SceneObject, SceneObjectConfig};
 
 const DEFAULT_INSTANCE_EXTENSIONS: InstanceExtensions = InstanceExtensions {
     ext_debug_utils: true,
@@ -190,5 +192,26 @@ impl<T> DerefMut for InitOption<T> {
 
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.get_mut()
+    }
+}
+
+pub fn radians_from_degrees(degrees: f32) -> f32 {
+    degrees * PI / 180.0
+}
+
+pub fn degrees_from_radians(radians: f32) -> f32 {
+    radians / PI * 180.0
+}
+
+pub fn generate_scene_tree(scene_object_configs: &Vec<SceneObjectConfig>, scene_root: &mut SceneObject) {
+    
+}
+
+pub fn iterate_scene_tree<F>(scene_object: &mut SceneObject, func: &mut F)
+where F: FnMut(&mut SceneObject)
+{
+    func(scene_object);
+    for (_, child) in scene_object.children.iter_mut() {
+        iterate_scene_tree(child, func);
     }
 }

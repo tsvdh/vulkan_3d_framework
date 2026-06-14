@@ -32,11 +32,16 @@ use vulkano::{Validated, VulkanError};
 use winit::window::Window;
 
 pub struct RenderItems {
+    // public
     pub window: Arc<Window>,
     pub swapchain: Arc<Swapchain>,
 
+    // configuration
+
+    // access through methods
     recreate_swapchain: bool,
 
+    // private
     color_attachment_image_views: Vec<Arc<ImageView>>,
     depth_attachment_image_view: Arc<ImageView>,
     pipeline: Arc<GraphicsPipeline>,

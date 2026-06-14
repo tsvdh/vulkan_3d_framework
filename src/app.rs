@@ -1,18 +1,21 @@
+mod scene;
 mod logic;
-mod material;
 mod rendering;
 mod shader_modules;
 mod timing;
 mod ui;
 mod util;
 
+use std::collections::BTreeMap;
 use crate::app::logic::LogicItems;
 use crate::app::rendering::RenderItems;
+use crate::app::scene::SceneLayout;
 use crate::app::timing::TimingItems;
 use crate::app::ui::GuiItems;
 use crate::app::util::{get_common_vulkan_items, CommonItems, InitOption};
 use log::info;
 use obj::{load_obj, Obj};
+use serde::Deserialize;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
@@ -28,10 +31,22 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
+#[derive(Deserialize)]
+pub struct Config {
+    pub resolution: [u32; 2],
+    pub show_frame_times: bool,
+}
+
 pub struct App {
+    config: Config,
+    scene_layout: SceneLayout,
+
+    
+
+    vertex_buffers: BTreeMap<u32, Subbuffer<[obj::Vertex]>>,
+    index_buffers: BTreeMap<u32, Vec<Subbuffer<[u16]>>>,
+
     common_items: CommonItems,
-    vertex_buffer: Subbuffer<[obj::Vertex]>,
-    index_buffer: Subbuffer<[u16]>,
     render_items: InitOption<RenderItems>,
     logic_items: LogicItems,
     gui_items: InitOption<GuiItems>,
@@ -39,7 +54,7 @@ pub struct App {
 }
 
 impl App {
-    
+
     pub fn start() {
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Poll);
@@ -67,49 +82,77 @@ impl App {
             Some(event_loop)
         );
 
+        let config: Config = serde_json::from_reader(File::open("configs/config.json").unwrap()).unwrap();
+        let mut scene_layout: SceneLayout = serde_json::from_reader(File::open("configs/scene_layout.json").unwrap()).unwrap();
+
+        let mut vertex_buffers = vec![];
+        let mut index_buffers = vec![];
+
         let working_dir = env::current_dir().unwrap();
-        let obj_path = working_dir.join("resources/bunny_face_normals.obj");
-        info!("Reading object at {:?}", obj_path);
-        let buf_reader = BufReader::new(File::open(obj_path).unwrap());
-        let obj: Obj<obj::Vertex, u16> = load_obj(buf_reader).unwrap();
 
-        let vertex_buffer = Buffer::from_iter(
-            vulkan_items.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            obj.vertices
-        ).unwrap();
+        let mut id = 0;
+        let cur_scene_objects = &mut scene_layout.scene_objects;
 
-        let index_buffer = Buffer::from_iter(
-            vulkan_items.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::INDEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            obj.indices
-        ).unwrap();
+
+        for scene_object in cur_scene_objects.iter_mut() {
+            scene_object.id = id as u32;
+            scene_object.obj_id = id as u32;
+
+            let obj_path = working_dir.join("resources/objects").join(scene_object.obj_path.as_str());
+            info!("Reading object at {:?}", obj_path);
+
+            let buf_reader = BufReader::new(File::open(obj_path).unwrap());
+            let obj: Obj<obj::Vertex, u16> = load_obj(buf_reader).unwrap();
+
+            let vertex_buffer = Buffer::from_iter(
+                vulkan_items.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::VERTEX_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                obj.vertices
+            ).unwrap();
+
+            let index_buffer = Buffer::from_iter(
+                vulkan_items.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::INDEX_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                obj.indices
+            ).unwrap();
+
+            vertex_buffers.push(vertex_buffer);
+            index_buffers.push(index_buffer);
+
+            let material_path = working_dir.join("resources/materials").join(scene_object.material_path.as_str());
+            scene_object.material = serde_json::from_reader(File::open(material_path).unwrap()).unwrap();
+
+            id += 1;
+        }
+
 
         let logic_items = LogicItems::new();
-        let timing_items = TimingItems::new();
+        let timing_items = TimingItems::new(&config);
 
         App {
             common_items: vulkan_items,
-            vertex_buffer,
-            index_buffer,
+            vertex_buffers,
+            index_buffers,
             render_items: InitOption::none(),
             logic_items,
             gui_items: InitOption::none(),
             timing_items,
+            config,
+            scene_layout
         }
     }
 }
@@ -119,7 +162,8 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
             .with_title("Vulkan Playground")
-            .with_inner_size(PhysicalSize::new(800, 600))
+            .with_inner_size(PhysicalSize::new(self.config.resolution[0],
+                                               self.config.resolution[1]))
             .with_visible(false);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
