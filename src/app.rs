@@ -6,24 +6,20 @@ mod timing;
 mod ui;
 mod util;
 
-use std::collections::BTreeMap;
 use crate::app::logic::LogicItems;
 use crate::app::rendering::RenderItems;
-use crate::app::scene::SceneLayout;
+use crate::app::scene::{SceneLayout, SceneLayoutConfig};
+use crate::app::shader_modules::fragment_shader_module::FragmentData;
+use crate::app::shader_modules::vertex_shader_module::VertexData;
 use crate::app::timing::TimingItems;
 use crate::app::ui::GuiItems;
-use crate::app::util::{get_common_vulkan_items, CommonItems, InitOption};
-use log::info;
-use obj::{load_obj, Obj};
+use crate::app::util::{get_common_vulkan_items, CommonItems, InitOption, MeshHolder};
 use serde::Deserialize;
-use std::env;
+use std::collections::{BTreeMap};
 use std::fs::File;
-use std::io::BufReader;
 use std::sync::Arc;
 use std::time::Instant;
-use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::device::{DeviceExtensions, DeviceFeatures, QueueFlags};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::swapchain::Surface;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -37,14 +33,13 @@ pub struct Config {
     pub show_frame_times: bool,
 }
 
+type UniformHolder = BTreeMap<u32, (VertexData, FragmentData)>;
+
 pub struct App {
     config: Config,
     scene_layout: SceneLayout,
-
-    
-
-    vertex_buffers: BTreeMap<u32, Subbuffer<[obj::Vertex]>>,
-    index_buffers: BTreeMap<u32, Vec<Subbuffer<[u16]>>>,
+    mesh_holder: MeshHolder,
+    uniform_holder: UniformHolder,
 
     common_items: CommonItems,
     render_items: InitOption<RenderItems>,
@@ -74,7 +69,7 @@ impl App {
             ..DeviceFeatures::empty()
         };
 
-        let vulkan_items = get_common_vulkan_items(
+        let common_items = get_common_vulkan_items(
             Some(instance_extensions),
             Some(device_extensions),
             Some(device_features),
@@ -82,77 +77,25 @@ impl App {
             Some(event_loop)
         );
 
-        let config: Config = serde_json::from_reader(File::open("configs/config.json").unwrap()).unwrap();
-        let mut scene_layout: SceneLayout = serde_json::from_reader(File::open("configs/scene_layout.json").unwrap()).unwrap();
+        let config: Config = serde_json::from_reader(File::open("configs/config.json").unwrap())
+            .expect("Incorrect config file");
+        let scene_layout_config: SceneLayoutConfig = serde_json::from_reader(File::open("configs/scene_layout.json").unwrap())
+            .expect("Incorrect scene layout file");
 
-        let mut vertex_buffers = vec![];
-        let mut index_buffers = vec![];
+        let (scene_layout, mesh_holder) = scene_layout_config.parse(&common_items);
 
-        let working_dir = env::current_dir().unwrap();
-
-        let mut id = 0;
-        let cur_scene_objects = &mut scene_layout.scene_objects;
-
-
-        for scene_object in cur_scene_objects.iter_mut() {
-            scene_object.id = id as u32;
-            scene_object.obj_id = id as u32;
-
-            let obj_path = working_dir.join("resources/objects").join(scene_object.obj_path.as_str());
-            info!("Reading object at {:?}", obj_path);
-
-            let buf_reader = BufReader::new(File::open(obj_path).unwrap());
-            let obj: Obj<obj::Vertex, u16> = load_obj(buf_reader).unwrap();
-
-            let vertex_buffer = Buffer::from_iter(
-                vulkan_items.memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::VERTEX_BUFFER,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                obj.vertices
-            ).unwrap();
-
-            let index_buffer = Buffer::from_iter(
-                vulkan_items.memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::INDEX_BUFFER,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                obj.indices
-            ).unwrap();
-
-            vertex_buffers.push(vertex_buffer);
-            index_buffers.push(index_buffer);
-
-            let material_path = working_dir.join("resources/materials").join(scene_object.material_path.as_str());
-            scene_object.material = serde_json::from_reader(File::open(material_path).unwrap()).unwrap();
-
-            id += 1;
-        }
-
-
-        let logic_items = LogicItems::new();
         let timing_items = TimingItems::new(&config);
 
         App {
-            common_items: vulkan_items,
-            vertex_buffers,
-            index_buffers,
+            common_items,
             render_items: InitOption::none(),
-            logic_items,
+            logic_items: LogicItems::new(),
             gui_items: InitOption::none(),
             timing_items,
             config,
-            scene_layout
+            scene_layout,
+            mesh_holder,
+            uniform_holder: UniformHolder::new(),
         }
     }
 }
@@ -167,16 +110,20 @@ impl ApplicationHandler for App {
             .with_visible(false);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-        self.render_items = InitOption::some(RenderItems::new(&self.common_items, window.clone()));
+        self.render_items = InitOption::some(
+            RenderItems::new(&self.common_items, window.clone(), &self.scene_layout)
+        );
         if self.render_items.swapchain.image_count() != 2 {
             panic!("Swapchain should contain exactly two images");
         }
-        self.gui_items = InitOption::some(GuiItems::new(
-            event_loop, &self.common_items, &self.render_items));
+        self.gui_items = InitOption::some(
+            GuiItems::new(event_loop, &self.common_items, &self.render_items)
+        );
 
         // first frame render prep
         self.gui_items.build_ui();
-        self.logic_items.base_logic(&mut self.timing_items, &self.render_items);
+        self.logic_items.base_logic(&mut self.timing_items, &self.render_items,
+                                    &mut self.scene_layout, &mut self.uniform_holder);
 
         window.set_visible(true);
     }
@@ -224,11 +171,11 @@ impl ApplicationHandler for App {
                 self.render_items.frame_render(
                     &self.common_items,
                     &mut self.timing_items,
-                    &self.logic_items,
                     &mut self.gui_items,
                     acquire_future,
-                    self.vertex_buffer.clone(),
-                    self.index_buffer.clone(),
+                    &self.scene_layout,
+                    &self.mesh_holder,
+                    &self.uniform_holder
                 );
                 self.timing_items.frame_component_durations.render_cpu_duration = Some(render_cpu_start.elapsed());
                 *self.timing_items.get_render_gpu_start_mutex() = Instant::now();
@@ -238,7 +185,12 @@ impl ApplicationHandler for App {
                 self.timing_items.frame_component_durations.ui_duration = Some(ui_start.elapsed());
 
                 let logic_start = Instant::now();
-                self.logic_items.base_logic(&mut self.timing_items, &self.render_items);
+                self.logic_items.base_logic(
+                    &mut self.timing_items,
+                    &self.render_items,
+                    &mut self.scene_layout,
+                    &mut self.uniform_holder
+                );
                 self.timing_items.frame_component_durations.base_logic_duration = Some(logic_start.elapsed());
             }
             _ => {}

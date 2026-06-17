@@ -1,10 +1,10 @@
-use crate::app::logic::LogicItems;
+use std::collections::BTreeMap;
 use crate::app::shader_modules::fragment_shader_module::FragmentData;
 use crate::app::shader_modules::vertex_shader_module::VertexData;
 use crate::app::shader_modules::{fragment_shader_module, vertex_shader_module};
 use crate::app::timing::TimingItems;
 use crate::app::ui::GuiItems;
-use crate::app::util::CommonItems;
+use crate::app::util::{CommonItems, MeshHolder};
 use log::{info, warn};
 use std::sync::Arc;
 use vulkano::buffer::Subbuffer;
@@ -30,6 +30,10 @@ use vulkano::swapchain::{acquire_next_image, PresentMode, Surface, Swapchain, Sw
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError};
 use winit::window::Window;
+use crate::app::scene::SceneLayout;
+use crate::app::UniformHolder;
+
+type UniformBufferHolder = BTreeMap<u32, (Subbuffer<VertexData>, Subbuffer<FragmentData>)>;
 
 pub struct RenderItems {
     // public
@@ -46,28 +50,26 @@ pub struct RenderItems {
     depth_attachment_image_view: Arc<ImageView>,
     pipeline: Arc<GraphicsPipeline>,
     viewport: Viewport,
-    vertex_shader_uniform_buffer: Subbuffer<VertexData>,
-    fragment_shader_uniform_buffer: Subbuffer<FragmentData>,
+    uniform_buffer_holder: UniformBufferHolder,
 }
 
 impl RenderItems {
-
     pub fn set_recreate_swapchain(&mut self, value: bool) {
         self.recreate_swapchain = value;
     }
 
-    pub fn new(vulkan_items: &CommonItems, window: Arc<Window>) -> Self {
-        let surface = Surface::from_window(vulkan_items.instance.clone(), window.clone()).unwrap();
+    pub fn new(common_items: &CommonItems, window: Arc<Window>, scene_layout: &SceneLayout) -> Self {
+        let surface = Surface::from_window(common_items.instance.clone(), window.clone()).unwrap();
 
         let (swapchain, images) = {
-            let surface_capabilities = vulkan_items.device.physical_device()
+            let surface_capabilities = common_items.device.physical_device()
                 .surface_capabilities(&surface, Default::default()).unwrap();
 
-            let (image_format, _) = vulkan_items.device.physical_device()
+            let (image_format, _) = common_items.device.physical_device()
                 .surface_formats(&surface, Default::default()).unwrap()[0];
 
             Swapchain::new(
-                vulkan_items.device.clone(),
+                common_items.device.clone(),
                 surface.clone(),
                 SwapchainCreateInfo {
                     min_image_count: surface_capabilities.min_image_count.max(2),
@@ -80,11 +82,11 @@ impl RenderItems {
             ).unwrap()
         };
 
-        let (color_image_views, depth_image_view) = Self::make_image_views(&vulkan_items, &images);
+        let (color_image_views, depth_image_view) = make_image_views(&common_items, &images);
 
         let pipeline = {
-            let vertex_shader_module = vertex_shader_module::load(vulkan_items.device.clone()).expect("Failed to create vertex shader");
-            let fragment_shader_module = fragment_shader_module::load(vulkan_items.device.clone()).expect("Failed to create fragment shader");
+            let vertex_shader_module = vertex_shader_module::load(common_items.device.clone()).expect("Failed to create vertex shader");
+            let fragment_shader_module = fragment_shader_module::load(common_items.device.clone()).expect("Failed to create fragment shader");
             let vertex_shader = vertex_shader_module.entry_point("main").unwrap();
             let fragment_shader = fragment_shader_module.entry_point("main").unwrap();
 
@@ -96,9 +98,9 @@ impl RenderItems {
             ];
 
             let layout = PipelineLayout::new(
-                vulkan_items.device.clone(),
+                common_items.device.clone(),
                 PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
-                    .into_pipeline_layout_create_info(vulkan_items.device.clone()).unwrap()
+                    .into_pipeline_layout_create_info(common_items.device.clone()).unwrap()
             ).unwrap();
 
             let dynamic_rendering_info = PipelineRenderingCreateInfo {
@@ -108,7 +110,7 @@ impl RenderItems {
             };
 
             GraphicsPipeline::new(
-                vulkan_items.device.clone(),
+                common_items.device.clone(),
                 None,
                 GraphicsPipelineCreateInfo {
                     stages: stages.into_iter().collect(),
@@ -138,8 +140,14 @@ impl RenderItems {
             depth_range: 0.0..=1.0
         };
 
-        let vertex_shader_uniform_buffer = vulkan_items.uniform_buffer_allocator.allocate_sized().unwrap();
-        let fragment_shader_uniform_buffer = vulkan_items.uniform_buffer_allocator.allocate_sized().unwrap();
+        let mut uniform_buffer_holder = UniformBufferHolder::new();
+        {
+            let buf_alloc = common_items.uniform_buffer_allocator.clone();
+            for (id, _) in scene_layout.scene_objects.get_iter() {
+                uniform_buffer_holder.insert(*id, (buf_alloc.allocate_sized().unwrap(),
+                                                                 buf_alloc.allocate_sized().unwrap()));
+            }
+        }
 
         RenderItems {
             window,
@@ -149,8 +157,7 @@ impl RenderItems {
             pipeline,
             viewport,
             recreate_swapchain: false,
-            vertex_shader_uniform_buffer,
-            fragment_shader_uniform_buffer,
+            uniform_buffer_holder
         }
     }
 
@@ -181,7 +188,7 @@ impl RenderItems {
 
             self.swapchain = new_swapchain;
             (self.color_attachment_image_views,
-             self.depth_attachment_image_view) = Self::make_image_views(vulkan_items, &new_images);
+             self.depth_attachment_image_view) = make_image_views(vulkan_items, &new_images);
             self.viewport.extent = new_window_size.into();
             self.recreate_swapchain = false;
         }
@@ -207,25 +214,13 @@ impl RenderItems {
     pub fn frame_render(&mut self,
                         vulkan_items: &CommonItems,
                         timing_items: &mut TimingItems,
-                        logic_items: &LogicItems,
                         gui_items: &mut GuiItems,
                         acquire_future: SwapchainAcquireFuture,
-                        vertex_buffer: Subbuffer<[obj::Vertex]>,
-                        index_buffer: Subbuffer<[u16]>,
+                        scene_layout: &SceneLayout,
+                        mesh_holder: &MeshHolder,
+                        uniform_holder: &UniformHolder,
     ) {
-        *self.vertex_shader_uniform_buffer.write().unwrap() = *logic_items.get_vertex_shader_uniform();
-        *self.fragment_shader_uniform_buffer.write().unwrap() = *logic_items.get_fragment_shader_uniform();
-
         let descriptor_set_layout = self.pipeline.layout().set_layouts()[0].clone();
-        let descriptor_set = DescriptorSet::new(
-            vulkan_items.descriptor_set_allocator.clone(),
-            descriptor_set_layout.clone(),
-            [
-                WriteDescriptorSet::buffer(0, self.vertex_shader_uniform_buffer.clone()),
-                WriteDescriptorSet::buffer(1, self.fragment_shader_uniform_buffer.clone())
-            ],
-            []
-        ).unwrap();
 
         let image_index = acquire_future.image_index();
         let image_view = self.color_attachment_image_views[image_index as usize].clone();
@@ -255,12 +250,46 @@ impl RenderItems {
                 }
             ).unwrap()
             .set_viewport(0, [self.viewport.clone()].into_iter().collect()).unwrap()
-            .bind_pipeline_graphics(self.pipeline.clone()).unwrap()
-            .bind_descriptor_sets(PipelineBindPoint::Graphics, self.pipeline.layout().clone(), 0, descriptor_set).unwrap()
-            .bind_vertex_buffers(0, vertex_buffer.clone()).unwrap()
-            .bind_index_buffer(index_buffer.clone()).unwrap();
+            .bind_pipeline_graphics(self.pipeline.clone()).unwrap();
 
-        unsafe { command_buffer_builder.draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0).unwrap(); }
+        for (id, scene_object) in scene_layout.scene_objects.get_iter()
+        {
+            if scene_object.mesh_id.is_none() || scene_object.material.is_none() {
+                continue
+            }
+
+            // --- uniform buffers ---
+            let (vertex_uniform,
+                fragment_uniform) = uniform_holder.get(id).unwrap();
+            let (vertex_uniform_buffer,
+                fragment_uniform_buffer) = self.uniform_buffer_holder.get(id).unwrap();
+
+            *vertex_uniform_buffer.write().unwrap() = *vertex_uniform;
+            *fragment_uniform_buffer.write().unwrap() = *fragment_uniform;
+
+            // --- descriptor set ---
+            let descriptor_set = DescriptorSet::new(
+                vulkan_items.descriptor_set_allocator.clone(),
+                descriptor_set_layout.clone(),
+                [
+                    WriteDescriptorSet::buffer(0, vertex_uniform_buffer.clone()),
+                    WriteDescriptorSet::buffer(1, fragment_uniform_buffer.clone())
+                ],
+                []
+            ).unwrap();
+
+            command_buffer_builder.bind_descriptor_sets(PipelineBindPoint::Graphics,
+                                                        self.pipeline.layout().clone(), 0, descriptor_set).unwrap();
+
+            // --- mesh buffers ---
+            let (vertex_buffer, index_buffer) = mesh_holder.get_by_id(scene_object.mesh_id.unwrap());
+
+            command_buffer_builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
+            command_buffer_builder.bind_index_buffer(index_buffer.clone()).unwrap();
+
+            // --- draw ---
+            unsafe { command_buffer_builder.draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0).unwrap(); }
+        }
 
         command_buffer_builder
             .end_rendering().unwrap();
@@ -291,27 +320,26 @@ impl RenderItems {
             }
         }
     }
+}
 
-    fn make_image_views(vulkan_items: &CommonItems, images: &[Arc<Image>]) -> (Vec<Arc<ImageView>>, Arc<ImageView>) {
-        let color_image_views = images.iter().map(|image| {
-            ImageView::new_default(image.clone()).unwrap()
-        }).collect();
+fn make_image_views(vulkan_items: &CommonItems, images: &[Arc<Image>]) -> (Vec<Arc<ImageView>>, Arc<ImageView>) {
+    let color_image_views = images.iter().map(|image| {
+        ImageView::new_default(image.clone()).unwrap()
+    }).collect();
 
-        let depth_image_view = ImageView::new_default(
-            Image::new(
-                vulkan_items.memory_allocator.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    format: Format::D16_UNORM,
-                    extent: images[0].extent(),
-                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default()
-            ).unwrap()
-        ).unwrap();
+    let depth_image_view = ImageView::new_default(
+        Image::new(
+            vulkan_items.memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::D16_UNORM,
+                extent: images[0].extent(),
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default()
+        ).unwrap()
+    ).unwrap();
 
-        (color_image_views, depth_image_view)
-    }
-
+    (color_image_views, depth_image_view)
 }

@@ -1,19 +1,23 @@
-use std::f32::consts::PI;
 use log::{debug, error, info, warn};
+use obj::{load_obj, Obj, Vertex};
+use std::collections::{btree_map, BTreeMap, HashMap};
+use std::f32::consts::PI;
+use std::fs::File;
+use std::io::BufReader;
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::sync::Arc;
 use vulkano::buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo};
-use vulkano::buffer::BufferUsage;
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::physical::PhysicalDeviceType;
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo, QueueFlags};
 use vulkano::instance::debug::{DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger, DebugUtilsMessengerCallback, DebugUtilsMessengerCreateInfo};
 use vulkano::instance::{Instance, InstanceCreateInfo, InstanceExtensions};
-use vulkano::memory::allocator::{MemoryTypeFilter, StandardMemoryAllocator};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
 use vulkano::VulkanLibrary;
 use winit::event_loop::EventLoop;
-use crate::app::scene::{SceneObject, SceneObjectConfig};
 
 const DEFAULT_INSTANCE_EXTENSIONS: InstanceExtensions = InstanceExtensions {
     ext_debug_utils: true,
@@ -203,15 +207,141 @@ pub fn degrees_from_radians(radians: f32) -> f32 {
     radians / PI * 180.0
 }
 
-pub fn generate_scene_tree(scene_object_configs: &Vec<SceneObjectConfig>, scene_root: &mut SceneObject) {
-    
+pub trait SettableId {
+    fn set_id(&mut self, id: u32);
 }
 
-pub fn iterate_scene_tree<F>(scene_object: &mut SceneObject, func: &mut F)
-where F: FnMut(&mut SceneObject)
-{
-    func(scene_object);
-    for (_, child) in scene_object.children.iter_mut() {
-        iterate_scene_tree(child, func);
+pub struct ObjectHolder<T> {
+    cur_new_id: u32,
+    objects: BTreeMap<u32, T>
+}
+
+impl<T> ObjectHolder<T> {
+
+    pub fn new() -> ObjectHolder<T> {
+        ObjectHolder {
+            cur_new_id: 0,
+            objects: BTreeMap::new(),
+        }
+    }
+
+    pub fn add_with_id(&mut self, mut object: T) -> u32
+    where T: SettableId
+    {
+        object.set_id(self.cur_new_id);
+        self.add(object)
+    }
+
+    pub fn add(&mut self, object: T) -> u32 {
+        let cur_id = self.cur_new_id;
+        self.cur_new_id += 1;
+
+        self.objects.insert(cur_id, object);
+        cur_id
+    }
+
+    pub fn remove(&mut self, id: u32) {
+        self.objects.remove(&id).expect("Id not present");
+    }
+
+    pub fn get_mut(&mut self, id: u32) -> &mut T {
+        self.objects.get_mut(&id).expect("Id not present")
+    }
+
+    pub fn get(&self, id: u32) -> &T {
+        self.objects.get(&id).expect("Id not present")
+    }
+
+    pub fn get_iter(&'_ self) -> btree_map::Iter<'_, u32, T> {
+        self.objects.iter()
+    }
+
+    pub fn get_iter_mut(&'_ mut self) -> btree_map::IterMut<'_, u32, T> {
+        self.objects.iter_mut()
     }
 }
+
+pub struct MeshHolder {
+    vertex_buffer_holder: ObjectHolder<Subbuffer<[Vertex]>>,
+    index_buffer_holder: ObjectHolder<Subbuffer<[u16]>>,
+
+    name_to_id_map: HashMap<String, u32>
+}
+
+impl MeshHolder {
+
+    pub fn new() -> Self {
+        MeshHolder {
+            vertex_buffer_holder: ObjectHolder::new(),
+            index_buffer_holder: ObjectHolder::new(),
+            name_to_id_map: HashMap::new(),
+        }
+    }
+
+    pub fn get_by_id(&self, id: u32) -> (&Subbuffer<[Vertex]>, &Subbuffer<[u16]>) {
+        (self.vertex_buffer_holder.get(id), self.index_buffer_holder.get(id))
+    }
+
+    pub fn get_id(&self, name: &str) -> u32 {
+        *self.name_to_id_map.get(name).expect("Name not present")
+    }
+
+    pub fn has_name(&self, name: &str) -> bool {
+        self.name_to_id_map.contains_key(name)
+    }
+
+    pub fn add_mesh(&mut self, name: String,
+                    buffers: (Subbuffer<[Vertex]>, Subbuffer<[u16]>)) -> u32
+    {
+        if self.has_name(&name) {
+            panic!("Name already present")
+        }
+
+        let mesh_id = self.vertex_buffer_holder.add(buffers.0);
+        self.index_buffer_holder.add(buffers.1);
+
+        self.name_to_id_map.insert(name, mesh_id);
+
+        mesh_id
+    }
+
+    pub fn load_and_add_mesh(&mut self, name: String, path: &PathBuf, common_items: &CommonItems) -> u32 {
+        let buffers = load_mesh(path, common_items);
+        self.add_mesh(name, buffers)
+    }
+}
+
+pub fn load_mesh(path: &PathBuf, common_items: &CommonItems) -> (Subbuffer<[Vertex]>, Subbuffer<[u16]>) {
+    info!("Reading object at {:?}", path);
+
+    let buf_reader = BufReader::new(File::open(path).unwrap());
+    let obj: Obj<Vertex, u16> = load_obj(buf_reader).unwrap();
+
+    let vertex_buffer = Buffer::from_iter(
+        common_items.memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::VERTEX_BUFFER,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        obj.vertices
+    ).unwrap();
+
+    let index_buffer = Buffer::from_iter(
+        common_items.memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::INDEX_BUFFER,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        obj.indices
+    ).unwrap();
+
+    (vertex_buffer, index_buffer)
+} 

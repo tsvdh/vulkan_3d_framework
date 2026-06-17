@@ -1,31 +1,29 @@
 {
   "camera": {
     "position": [0, 0, -5],
-    "look_at": [0, 0, 0]
-  },
-
-  "light": {
-    "name": "default_light",
-    "direction": [0, -1, 0],
+    "look_at": [0, 0, 0],
     "horizon": [1, 0, 0]
   },
-
+  "light": {
+    "name": "default_light",
+    "position": [0, 10, 0]
+  },
   "scene_objects": [
     {
       "name": "bunny1",
-      "translation": [2, 0, 0],
+      "translation": [1, 0, 0],
       "rotation": [0, 0, 0],
       "scale": [1, 1, 1],
-      "obj_path": "bunny_face_normals.obj",
+      "mesh_path": "bunny_face_normals.obj",
       "material_path": "default.json",
       "children": []
     },
     {
       "name": "bunny2",
-      "translation": [-2, 0, 0],
+      "translation": [-1, 0, 0],
       "rotation": [0, 0, 0],
       "scale": [1, 1, 1],
-      "obj_path": "bunny_face_normals.obj",
+      "mesh_path": "bunny_face_normals.obj",
       "material_path": "default.json",
       "children": []
     }
