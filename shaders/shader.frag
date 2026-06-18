@@ -42,9 +42,9 @@ void main() {
      PhongComponent specular = uniforms.material.specular;
 
      f_color = vec4(
-          ambient.color * ambient.coefficient
-          + diffuse.color * diffuse.coefficient * diffuse_power
-          + specular.color * specular.coefficient * specular_power,
+          ambient.color / 255 * ambient.coefficient
+          + diffuse.color / 255 * diffuse.coefficient * diffuse_power
+          + specular.color / 255 * specular.coefficient * specular_power,
           1.0
      );
 }

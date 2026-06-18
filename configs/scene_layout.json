@@ -1,6 +1,6 @@
 {
   "camera": {
-    "position": [0, 0, -3],
+    "position": [0, 0, -2],
     "look_at": [0, 0, 0],
     "horizon": [1, 0, 0]
   },
@@ -24,7 +24,7 @@
       "rotation": [0, 0, 0],
       "scale": [1, 1, 1],
       "mesh_path": "bunny_vertex_normals.obj",
-      "material_path": "default.json",
+      "material_path": "orange.json",
       "children": []
     }
   ]
