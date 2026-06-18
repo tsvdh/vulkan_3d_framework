@@ -1,13 +1,12 @@
+use crate::app::shader_modules::fragment_shader_module::PhongMaterial;
 use crate::app::util::{CommonItems, MeshHolder, ObjectHolder, SettableId};
-use glam::{U8Vec3, Vec3};
+use glam::Vec3;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::env;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use vulkano::padded::Padded;
-use crate::app::shader_modules::fragment_shader_module::PhongMaterial;
 // ----- Data holders -----
 
 #[derive(Deserialize)]
@@ -165,13 +164,10 @@ impl SceneLayoutConfig {
             }
 
             if scene_object_config.material_path.is_some() {
-                // let material_name = scene_object_config.material_path.as_ref().unwrap();
-                // let material_path = working_dir.join("resources/materials").join(material_name);
-                // scene_object.material = serde_json::from_reader(File::open(material_path).unwrap())
-                //     .expect("Incorrect material file");
-                scene_object.material = Some(PhongMaterial {
-
-                })
+                let material_name = scene_object_config.material_path.as_ref().unwrap();
+                let material_path = working_dir.join("resources/materials").join(material_name);
+                scene_object.material = serde_json::from_reader(File::open(material_path).unwrap())
+                    .expect("Incorrect material file");
             }
 
             let mut child_tree = SceneTree {

@@ -1,14 +1,14 @@
 #version 460
 
-//struct PhongComponent {
-//     vec3 color;
-//     float coefficient;
-//};
+struct PhongComponent {
+     vec3 color;
+     float coefficient;
+};
 
 struct PhongMaterial {
-     vec3 ambient;
-     vec3 diffuse;
-     vec3 specular;
+     PhongComponent ambient;
+     PhongComponent diffuse;
+     PhongComponent specular;
      uint shininess;
 };
 
@@ -18,9 +18,9 @@ layout(location = 1) in vec3 f_position;
 layout(location = 0) out vec4 f_color;
 
 layout(set = 0, binding = 1) uniform FragmentData {
+     PhongMaterial material;
      vec3 light_pos;
      vec3 eye_pos;
-     PhongMaterial material;
 } uniforms;
 
 void main() {
@@ -37,17 +37,14 @@ void main() {
           specular_power = pow(specular_power, uniforms.material.shininess);
      }
 
-//     PhongComponent ambient = uniforms.material.ambient;
-//     PhongComponent diffuse = uniforms.material.diffuse;
-//     PhongComponent specular = uniforms.material.specular;
+     PhongComponent ambient = uniforms.material.ambient;
+     PhongComponent diffuse = uniforms.material.diffuse;
+     PhongComponent specular = uniforms.material.specular;
 
      f_color = vec4(
-//          ambient.color * ambient.coefficient
-//          + diffuse.color * diffuse.coefficient * diffuse_power
-//          + specular.color * specular.coefficient * specular_power,
-             uniforms.material.ambient
-             + uniforms.material.ambient
-             + uniforms.material.ambient,
+          ambient.color * ambient.coefficient
+          + diffuse.color * diffuse.coefficient * diffuse_power
+          + specular.color * specular.coefficient * specular_power,
           1.0
      );
 }

@@ -3,8 +3,8 @@ import uuid
 import pyautogui
 import time
 
-# shader path is shaders\$dir_name$\$shader_name$
-# rust module declaration is assumed to be in $root$\src\bin\$dir_name$\shader_modules.rs
+# shader path is shaders\$shader_name$
+# rust module declaration is assumed to be in $root$\src\bin\shader_modules.rs
 
 root = sys.argv[1]
 shader_path = sys.argv[2]
@@ -28,6 +28,7 @@ if uuid_line is None:
 valid_uuid = str(uuid.uuid4())
 valid_uuid = valid_uuid.replace("0", "x")
 valid_uuid = valid_uuid.replace("f", "x")
+valid_uuid = valid_uuid.replace("e", "x")
 
 uuid_line_start = rust_file_contents[uuid_line].split("[")[0]
 uuid_line_end = '[("edit_id", "__X__")]\n'.replace("__X__", valid_uuid)

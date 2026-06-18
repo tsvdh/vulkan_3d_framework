@@ -14,6 +14,6 @@ pub mod fragment_shader_module {
         ty: "fragment",
         path: "shaders/shader.frag",
         custom_derives: [Default, Copy, Clone, Deserialize],
-        define: [("edit_id", "a2c7b57-2ec4-4c6e-8x6d-b8cb41484792")]
+        define: [("edit_id", "363b73xc-dxcc-4159-b882-cxa25d5xbxxx")]
     }
 }
