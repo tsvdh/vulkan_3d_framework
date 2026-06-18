@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectTasksOptions">
     <TaskOptions isEnabled="true">
-      <option name="arguments" value="C:\Users\tsvdh\CodeProjects\RustRover\vulkan_playground\scripts\shader_mod_updater.py $ContentRoot$ $FilePathRelativeToProjectRoot$" />
+      <option name="arguments" value="$ContentRoot$\scripts\shader_mod_updater.py $ContentRoot$ $FilePathRelativeToProjectRoot$" />
       <option name="checkSyntaxErrors" value="true" />
       <option name="description" />
       <option name="exitCodeBehavior" value="ERROR" />
@@ -14,7 +14,7 @@
         <array />
       </option>
       <option name="outputFromStdout" value="false" />
-      <option name="program" value="$PROJECT_DIR$/.venv/Scripts/python.exe" />
+      <option name="program" value="$ContentRoot$/.venv/Scripts/python.exe" />
       <option name="runOnExternalChanges" value="false" />
       <option name="scopeName" value="Project Files" />
       <option name="trackOnlyRoot" value="false" />

@@ -6,7 +6,8 @@ use std::env;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-
+use vulkano::padded::Padded;
+use crate::app::shader_modules::fragment_shader_module::PhongMaterial;
 // ----- Data holders -----
 
 #[derive(Deserialize)]
@@ -66,21 +67,6 @@ pub struct Camera {
 pub struct Light {
     pub name: String,
     pub position: Vec3,
-}
-
-#[derive(Deserialize, Default)]
-pub struct PhongMaterial {
-    pub name: String,
-    pub ambient: PhongComponent,
-    pub diffuse: PhongComponent,
-    pub specular: PhongComponent,
-    pub shininess: u32,
-}
-
-#[derive(Deserialize, Default)]
-pub struct PhongComponent {
-    pub color: U8Vec3,
-    pub coefficient: f32,
 }
 
 // ----- Functionality -----
@@ -162,6 +148,10 @@ impl SceneLayoutConfig {
             let object_id = scene_objects.add_with_id(scene_object);
             let scene_object = scene_objects.get_mut(object_id);
 
+            if scene_object_config.mesh_path.is_some() && scene_object_config.material_path.is_none() {
+                panic!("Material is required if mesh is present")
+            }
+
             if scene_object_config.mesh_path.is_some() {
                 let mesh_name = scene_object_config.mesh_path.clone().unwrap();
                 let mesh_path = working_dir.join("resources/meshes").join(mesh_name.clone());
@@ -175,10 +165,13 @@ impl SceneLayoutConfig {
             }
 
             if scene_object_config.material_path.is_some() {
-                let material_name = scene_object_config.material_path.as_ref().unwrap();
-                let material_path = working_dir.join("resources/materials").join(material_name);
-                scene_object.material = serde_json::from_reader(File::open(material_path).unwrap())
-                    .expect("Incorrect material file");
+                // let material_name = scene_object_config.material_path.as_ref().unwrap();
+                // let material_path = working_dir.join("resources/materials").join(material_name);
+                // scene_object.material = serde_json::from_reader(File::open(material_path).unwrap())
+                //     .expect("Incorrect material file");
+                scene_object.material = Some(PhongMaterial {
+
+                })
             }
 
             let mut child_tree = SceneTree {

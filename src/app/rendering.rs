@@ -141,12 +141,14 @@ impl RenderItems {
         };
 
         let mut uniform_buffer_holder = UniformBufferHolder::new();
-        {
-            let buf_alloc = common_items.uniform_buffer_allocator.clone();
-            for (id, _) in scene_layout.scene_objects.get_iter() {
-                uniform_buffer_holder.insert(*id, (buf_alloc.allocate_sized().unwrap(),
-                                                                 buf_alloc.allocate_sized().unwrap()));
+        let buf_alloc = common_items.uniform_buffer_allocator.clone();
+
+        for (id, scene_object) in scene_layout.scene_objects.get_iter() {
+            if scene_object.mesh_id.is_none() {
+                continue
             }
+            uniform_buffer_holder.insert(*id, (buf_alloc.allocate_sized().unwrap(),
+                                                             buf_alloc.allocate_sized().unwrap()));
         }
 
         RenderItems {

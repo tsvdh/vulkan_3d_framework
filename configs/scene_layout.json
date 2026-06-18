@@ -23,7 +23,7 @@
       "translation": [-1, 0, 0],
       "rotation": [0, 0, 0],
       "scale": [1, 1, 1],
-      "mesh_path": "bunny_face_normals.obj",
+      "mesh_path": "bunny_vertex_normals.obj",
       "material_path": "default.json",
       "children": []
     }

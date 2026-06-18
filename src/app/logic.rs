@@ -132,7 +132,8 @@ fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
     };
     let fragment_data = FragmentData {
         light_pos: scene_layout.light.position.to_array().into(),
-        eye_pos: scene_layout.camera.position.to_array()
+        eye_pos: scene_layout.camera.position.to_array().into(),
+        material: cur_object.material.unwrap_or_default(),
     };
 
     uniform_holder.insert(cur_object.id, (vertex_data, fragment_data));

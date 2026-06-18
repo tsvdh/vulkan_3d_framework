@@ -1,15 +1,15 @@
 {
   "name": "default",
   "ambient": {
-    "color": [255, 255, 255],
+    "color": [1, 1, 1],
     "coefficient": 0.05
   },
   "diffuse": {
-    "color": [255, 255, 255],
+    "color": [1, 1, 1],
     "coefficient": 0.41
   },
   "specular": {
-    "color": [255, 255, 255],
+    "color": [1, 1, 1],
     "coefficient": 1.0
   },
   "shininess": 64

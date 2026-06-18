@@ -10,7 +10,7 @@ root = sys.argv[1]
 shader_path = sys.argv[2]
 shader_path = shader_path.replace("\\", "/")
 
-rust_file_path = "".join([root, "\\src\\bin\\", shader_path.split("/")[1], "\\shader_modules.rs"])
+rust_file_path = "".join([root, "\\src\\app\\shader_modules.rs"])
 
 ### update edit_id in shader_modules.rs ###
 
@@ -20,7 +20,7 @@ with open(rust_file_path) as rust_file:
 uuid_line = None
 for i, line in enumerate(rust_file_contents):
     if shader_path in line:
-        uuid_line = i + 1
+        uuid_line = i + 2
 
 if uuid_line is None:
     raise Exception("Cannot find line to replace")
