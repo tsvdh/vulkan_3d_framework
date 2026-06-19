@@ -3,7 +3,7 @@ pub mod vertex_shader_module {
         ty: "vertex",
         path: "shaders/shader.vert",
         custom_derives: [Default, Copy, Clone],
-        define: [("edit_id", "x3axdx7x-xcxx-4axa-aaex-833993bdx87d")]
+        define: [("edit_id", "4xx2ax83b-4xd4-43a1-a3a2-9d88ax8424x7")]
     }
 }
 

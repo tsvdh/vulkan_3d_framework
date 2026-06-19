@@ -114,21 +114,22 @@ impl LogicItems {
         self.handle_input(frame_duration, timing_items, scene_layout);
 
         let view_proj_matrix = make_view_proj_matrix(render_items, scene_layout);
-        walk_through_tree(&scene_layout.scene_tree, scene_layout, &view_proj_matrix, uniform_holder);
+        walk_through_tree(&scene_layout.scene_tree, scene_layout, &view_proj_matrix, &Mat4::IDENTITY, uniform_holder);
 
         self.keys_pressed.clear();
     }
 }
 
 fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
-                     prev_mvp_matrix: &Mat4, uniform_holder: &mut UniformHolder)
+                     view_proj_matrix: &Mat4, prev_model_matrix: &Mat4,
+                     uniform_holder: &mut UniformHolder)
 {
     let cur_object = scene_layout.scene_objects.get(scene_tree.object_id);
-    let cur_model_matrix = make_model_matrix(cur_object);
-    let new_mvp_matrix = prev_mvp_matrix * cur_model_matrix;
+    let cur_model_matrix = prev_model_matrix * make_model_matrix(cur_object);
 
     let vertex_data = VertexData {
-        mvp: new_mvp_matrix.to_cols_array_2d()
+        view_proj: view_proj_matrix.to_cols_array_2d(),
+        model: cur_model_matrix.to_cols_array_2d(),
     };
     let fragment_data = FragmentData {
         material: cur_object.material.unwrap_or_default().into(),
@@ -139,7 +140,7 @@ fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
     uniform_holder.insert(cur_object.id, (vertex_data, fragment_data));
 
     for child in scene_tree.children.iter() {
-        walk_through_tree(child, scene_layout, &new_mvp_matrix, uniform_holder);
+        walk_through_tree(child, scene_layout, view_proj_matrix, &cur_model_matrix, uniform_holder);
     }
 }
 
@@ -149,7 +150,7 @@ fn make_view_proj_matrix(render_items: &RenderItems,
     let image_extent = render_items.swapchain.image_extent();
     let aspect_ratio = image_extent[0] as f32 / image_extent[1] as f32;
     let projection = Mat4::perspective_lh(
-        FRAC_PI_2,
+        radians_from_degrees(65.0),
         aspect_ratio,
         0.1,
         1000.0
