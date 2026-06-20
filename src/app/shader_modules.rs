@@ -3,7 +3,7 @@ pub mod vertex_shader_module {
         ty: "vertex",
         path: "shaders/shader.vert",
         custom_derives: [Default, Copy, Clone],
-        define: [("edit_id", "4xx2ax83b-4xd4-43a1-a3a2-9d88ax8424x7")]
+        define: [("edit_id", "aaxc86bx-83d2-4738-9adx-bxa164879c69")]
     }
 }
 
@@ -14,6 +14,6 @@ pub mod fragment_shader_module {
         ty: "fragment",
         path: "shaders/shader.frag",
         custom_derives: [Default, Copy, Clone, Deserialize],
-        define: [("edit_id", "8bx5xcxa-xxca-4286-aa11-ccxb4cc28xcc")]
+        define: [("edit_id", "xbd398bd-615x-455c-8ab9-x27x5adxax1d")]
     }
 }
