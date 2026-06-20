@@ -13,26 +13,27 @@ struct PhongMaterial {
 };
 
 layout(location = 0) in vec3 f_normal;
-layout(location = 1) in vec3 f_position_camera_space;
+layout(location = 1) in vec3 f_position;
 
 layout(location = 0) out vec4 f_color;
 
 layout(set = 0, binding = 1) uniform FragmentData {
      PhongMaterial material;
-     vec3 light_pos_camera_space;
+     vec3 light_pos;
+     vec3 camera_pos;
 } uniforms;
 
 void main() {
      // f_color = vec4((f_normal + 1) / 2, 1.0);
 
-     vec3 light_dir = normalize(uniforms.light_pos_camera_space - f_position_camera_space);
-     vec3 eye_dir = normalize(vec3(0, 0, 0) - f_position_camera_space);
+     vec3 light_dir = normalize(uniforms.light_pos - f_position);
+     vec3 camera_dir = normalize(uniforms.camera_pos - f_position);
 
      float diffuse_power = max(dot(f_normal, light_dir), 0);
      float specular_power = 0;
      if (diffuse_power > 0) {
           vec3 refl_light_dir = reflect(-light_dir, f_normal);
-          specular_power = max(dot(eye_dir, refl_light_dir), 0);
+          specular_power = max(dot(camera_dir, refl_light_dir), 0);
           specular_power = pow(specular_power, uniforms.material.shininess);
      }
 

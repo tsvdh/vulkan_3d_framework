@@ -3,7 +3,7 @@ use crate::app::scene::{SceneLayout, SceneObject, SceneTree};
 use crate::app::shader_modules::fragment_shader_module::FragmentData;
 use crate::app::shader_modules::vertex_shader_module::VertexData;
 use crate::app::timing::TimingItems;
-use glam::{Mat4, Quat, Vec3, Vec4Swizzles};
+use glam::{Mat4, Quat, Vec3};
 use std::collections::BTreeSet;
 use std::f32::consts::FRAC_PI_2;
 use winit::event::KeyEvent;
@@ -113,62 +113,60 @@ impl LogicItems {
         let frame_duration = timing_items.get_frame_duration();
         self.handle_input(frame_duration, timing_items, scene_layout);
 
-        let proj_matrix = make_proj_matrix(render_items);
-        let view_matrix = make_view_matrix(scene_layout);
-        let light_post_camera_space = (view_matrix * scene_layout.light.position.extend(1.0)).xyz();
-        walk_through_tree(&scene_layout.scene_tree, scene_layout, &proj_matrix, &view_matrix,
-                          &light_post_camera_space, uniform_holder);
+        let view_proj_matrix = make_view_proj_matrix(render_items, scene_layout);
+        walk_through_tree(&scene_layout.scene_tree, scene_layout,
+                          &view_proj_matrix, &Mat4::IDENTITY,
+                          uniform_holder);
 
         self.keys_pressed.clear();
     }
 }
 
 fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
-                     proj_matrix: &Mat4, prev_model_view_matrix: &Mat4,
-                     light_pos_camera_space: &Vec3,
+                     view_proj_matrix: &Mat4, prev_model_matrix: &Mat4,
                      uniform_holder: &mut UniformHolder)
 {
     let cur_object = scene_layout.scene_objects.get(scene_tree.object_id);
-    let cur_model_view_matrix = prev_model_view_matrix * make_model_matrix(cur_object);
-    let cur_model_view_normals_matrix = cur_model_view_matrix.inverse().transpose();
-    let cur_mvp_matrix = proj_matrix * cur_model_view_matrix;
+    let cur_model_matrix = prev_model_matrix * make_model_matrix(cur_object);
+    let cur_model_normals_matrix = cur_model_matrix.inverse().transpose();
+    let cur_mvp_matrix = view_proj_matrix * cur_model_matrix;
 
     let vertex_data = VertexData {
-        proj: proj_matrix.to_cols_array_2d(),
-        model_view: cur_model_view_matrix.to_cols_array_2d(),
-        model_view_normals: cur_model_view_normals_matrix.to_cols_array_2d(),
+        view_proj: view_proj_matrix.to_cols_array_2d(),
+        model: cur_model_matrix.to_cols_array_2d(),
+        model_normals: cur_model_normals_matrix.to_cols_array_2d(),
         model_view_proj: cur_mvp_matrix.to_cols_array_2d()
     };
     let fragment_data = FragmentData {
         material: cur_object.material.unwrap_or_default().into(),
-        light_pos_camera_space: light_pos_camera_space.to_array()
+        light_pos: scene_layout.light.position.to_array().into(),
+        camera_pos: scene_layout.camera.position.to_array().into(),
     };
 
     uniform_holder.insert(cur_object.id, (vertex_data, fragment_data));
 
     for child in scene_tree.children.iter() {
-        walk_through_tree(child, scene_layout, proj_matrix, &cur_model_view_matrix,
-                          light_pos_camera_space, uniform_holder);
+        walk_through_tree(child, scene_layout, view_proj_matrix, &cur_model_matrix, uniform_holder);
     }
 }
 
-fn make_proj_matrix(render_items: &RenderItems, ) -> Mat4 {
+fn make_view_proj_matrix(render_items: &RenderItems, scene_layout: &mut SceneLayout) -> Mat4 {
     let image_extent = render_items.swapchain.image_extent();
     let aspect_ratio = image_extent[0] as f32 / image_extent[1] as f32;
-    Mat4::perspective_lh(
+    let projection = Mat4::perspective_lh(
         radians_from_degrees(65.0),
         aspect_ratio,
         0.1,
         1000.0
-    )
-}
+    );
 
-fn make_view_matrix(scene_layout: &mut SceneLayout) -> Mat4 {
-    Mat4::look_at_lh(
+    let view = Mat4::look_at_lh(
         scene_layout.camera.position,
         Vec3::ZERO,
         Vec3::NEG_Y
-    )
+    );
+
+    projection * view
 }
 
 fn make_model_matrix(scene_object: &SceneObject) -> Mat4 {
