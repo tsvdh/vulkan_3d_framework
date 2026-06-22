@@ -36,8 +36,8 @@ impl GuiItems {
     }
 
     pub fn build_ui(&mut self) {
-        self.gui.immediate_ui(|egui| {
-            let egui_context = egui.context();
+        self.gui.immediate_ui(|gui| {
+            let egui_context = gui.context();
             egui::Window::new("Hello world").show(&egui_context, |_ui| {});
         });
     }

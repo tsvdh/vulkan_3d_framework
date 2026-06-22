@@ -11,7 +11,7 @@ vulkano-shaders = "0.35"
 winit = "0.30"
 obj-rs = { git = "https://github.com/simnalamburt/obj-rs", rev = "62455dd", features = ["vulkano"] }
 glam = { version = "0.33", features = ["serde"] }
-egui = "0.31"
-egui_winit_vulkano = { git = "https://github.com/tsvdh/egui_winit_vulkano.git", branch = "master" }
+egui = "0.34"
+egui_winit_vulkano = { git = "https://github.com/tsvdh/egui_winit_vulkano.git", version = "0.28.1" }
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
