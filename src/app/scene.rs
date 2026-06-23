@@ -64,7 +64,6 @@ pub struct Camera {
 
 #[derive(Deserialize)]
 pub struct Light {
-    pub name: String,
     pub position: Vec3,
 }
 
@@ -91,7 +90,6 @@ impl Hash for SceneTree {
 }
 
 impl SceneLayoutConfig {
-
     pub fn parse(self, common_items: &CommonItems) -> (SceneLayout, MeshHolder) {
         let scene_root = SceneObject {
             id: Default::default(),
@@ -114,8 +112,8 @@ impl SceneLayoutConfig {
         let mut mesh_holder = MeshHolder::new();
 
         let working_dir = env::current_dir().unwrap();
-        Self::walk_through_tree(&self.scene_objects, common_items, &mut scene_objects,
-                                &mut scene_tree_root, &mut mesh_holder, &working_dir);
+        walk_through_tree(&self.scene_objects, common_items, &mut scene_objects,
+                          &mut scene_tree_root, &mut mesh_holder, &working_dir);
 
         let scene_layout = SceneLayout {
             camera: self.camera,
@@ -126,59 +124,59 @@ impl SceneLayoutConfig {
 
         (scene_layout, mesh_holder)
     }
+}
 
-    fn walk_through_tree(scene_object_configs: &Vec<SceneObjectConfig>,
-                         common_items: &CommonItems,
-                         scene_objects: &mut ObjectHolder<SceneObject>, scene_tree: &mut SceneTree,
-                         mesh_holder: &mut MeshHolder,
-                         working_dir: &PathBuf)
-    {
-        for scene_object_config in scene_object_configs {
+fn walk_through_tree(scene_object_configs: &Vec<SceneObjectConfig>,
+                     common_items: &CommonItems,
+                     scene_objects: &mut ObjectHolder<SceneObject>, scene_tree: &mut SceneTree,
+                     mesh_holder: &mut MeshHolder,
+                     working_dir: &PathBuf)
+{
+    for scene_object_config in scene_object_configs {
 
-            let scene_object = SceneObject {
-                id: Default::default(),
-                name: scene_object_config.name.clone(),
-                translation: scene_object_config.translation,
-                rotation: scene_object_config.rotation,
-                scale: scene_object_config.scale,
-                mesh_id: None,
-                material: None,
-            };
-            let object_id = scene_objects.add_with_id(scene_object);
-            let scene_object = scene_objects.get_mut(object_id);
+        let scene_object = SceneObject {
+            id: Default::default(),
+            name: scene_object_config.name.clone(),
+            translation: scene_object_config.translation,
+            rotation: scene_object_config.rotation,
+            scale: scene_object_config.scale,
+            mesh_id: None,
+            material: None,
+        };
+        let object_id = scene_objects.add_with_id(scene_object);
+        let scene_object = scene_objects.get_mut(object_id);
 
-            if scene_object_config.mesh_path.is_some() && scene_object_config.material_path.is_none() {
-                panic!("Material is required if mesh is present")
-            }
-
-            if scene_object_config.mesh_path.is_some() {
-                let mesh_name = scene_object_config.mesh_path.clone().unwrap();
-                let mesh_path = working_dir.join("resources/meshes").join(mesh_name.clone());
-
-                if !mesh_holder.has_name(&mesh_name) {
-                    let mesh_id = mesh_holder.load_and_add_mesh(mesh_name, &mesh_path, common_items);
-                    scene_object.mesh_id = Some(mesh_id);
-                } else {
-                    scene_object.mesh_id = Some(mesh_holder.get_id(&mesh_name));
-                }
-            }
-
-            if scene_object_config.material_path.is_some() {
-                let material_name = scene_object_config.material_path.as_ref().unwrap();
-                let material_path = working_dir.join("resources/materials").join(material_name);
-                scene_object.material = serde_json::from_reader(File::open(material_path).unwrap())
-                    .expect("Incorrect material file");
-            }
-
-            let mut child_tree = SceneTree {
-                object_id,
-                children: HashSet::new()
-            };
-
-            Self::walk_through_tree(&scene_object_config.children, common_items, scene_objects,
-                                    &mut child_tree, mesh_holder, working_dir);
-
-            scene_tree.children.insert(child_tree);
+        if scene_object_config.mesh_path.is_some() && scene_object_config.material_path.is_none() {
+            panic!("Material is required if mesh is present")
         }
+
+        if scene_object_config.mesh_path.is_some() {
+            let mesh_name = scene_object_config.mesh_path.clone().unwrap();
+            let mesh_path = working_dir.join("resources/meshes").join(mesh_name.clone());
+
+            if !mesh_holder.has_name(&mesh_name) {
+                let mesh_id = mesh_holder.load_and_add_mesh(mesh_name, &mesh_path, common_items);
+                scene_object.mesh_id = Some(mesh_id);
+            } else {
+                scene_object.mesh_id = Some(mesh_holder.get_id(&mesh_name));
+            }
+        }
+
+        if scene_object_config.material_path.is_some() {
+            let material_name = scene_object_config.material_path.as_ref().unwrap();
+            let material_path = working_dir.join("resources/materials").join(material_name);
+            scene_object.material = serde_json::from_reader(File::open(material_path).unwrap())
+                .expect("Incorrect material file");
+        }
+
+        let mut child_tree = SceneTree {
+            object_id,
+            children: HashSet::new()
+        };
+
+        walk_through_tree(&scene_object_config.children, common_items, scene_objects,
+                                &mut child_tree, mesh_holder, working_dir);
+
+        scene_tree.children.insert(child_tree);
     }
 }

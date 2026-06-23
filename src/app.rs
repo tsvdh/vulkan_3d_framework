@@ -104,7 +104,7 @@ impl ApplicationHandler for App {
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
-            .with_title("Vulkan Playground")
+            .with_title("Vulkan 3D Framework")
             .with_inner_size(PhysicalSize::new(self.config.resolution[0],
                                                self.config.resolution[1]))
             .with_visible(false);
@@ -121,7 +121,7 @@ impl ApplicationHandler for App {
         );
 
         // first frame render prep
-        self.gui_items.build_ui();
+        self.gui_items.build_ui(&self.scene_layout);
         self.logic_items.base_logic(&mut self.timing_items, &self.render_items,
                                     &mut self.scene_layout, &mut self.uniform_holder);
 
@@ -181,7 +181,7 @@ impl ApplicationHandler for App {
                 *self.timing_items.get_render_gpu_start_mutex() = Instant::now();
 
                 let ui_start = Instant::now();
-                self.gui_items.build_ui();
+                self.gui_items.build_ui(&self.scene_layout);
                 self.timing_items.frame_component_durations.ui_duration = Some(ui_start.elapsed());
 
                 let logic_start = Instant::now();

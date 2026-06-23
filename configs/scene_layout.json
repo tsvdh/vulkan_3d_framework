@@ -5,18 +5,34 @@
     "horizon": [1, 0, 0]
   },
   "light": {
-    "name": "default_light",
     "position": [0, 10, 0]
   },
   "scene_objects": [
     {
-      "name": "bunny1",
+      "name": "grey_bunnies",
       "translation": [1, 0, 0],
       "rotation": [0, 0, 0],
       "scale": [0.5, 0.5, 0.5],
-      "mesh_path": "bunny_face_normals.obj",
-      "material_path": "default.json",
-      "children": []
+      "children": [
+        {
+          "name": "bunny1.1",
+          "translation": [0, 1, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1],
+          "mesh_path": "bunny_face_normals.obj",
+          "material_path": "default.json",
+          "children": []
+        },
+        {
+          "name": "bunny1.2",
+          "translation": [0, -1, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1],
+          "mesh_path": "bunny_face_normals.obj",
+          "material_path": "default.json",
+          "children": []
+        }
+      ]
     },
     {
       "name": "bunny2",
