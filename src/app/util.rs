@@ -1,3 +1,4 @@
+use crate::app::scene::SceneEntity;
 use log::{debug, error, info, warn};
 use obj::{load_obj, Obj, Vertex};
 use std::collections::{btree_map, BTreeMap, HashMap};
@@ -207,10 +208,6 @@ pub fn degrees_from_radians(radians: f32) -> f32 {
     radians / PI * 180.0
 }
 
-pub trait SettableId {
-    fn set_id(&mut self, id: u32);
-}
-
 pub struct ObjectHolder<T> {
     cur_new_id: u32,
     objects: BTreeMap<u32, T>
@@ -226,7 +223,7 @@ impl<T> ObjectHolder<T> {
     }
 
     pub fn add_with_id(&mut self, mut object: T) -> u32
-    where T: SettableId
+    where T: SceneEntity
     {
         object.set_id(self.cur_new_id);
         self.add(object)

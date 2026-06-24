@@ -30,7 +30,7 @@ use vulkano::swapchain::{acquire_next_image, PresentMode, Surface, Swapchain, Sw
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError};
 use winit::window::Window;
-use crate::app::scene::SceneLayout;
+use crate::app::scene::{SceneLayout, SceneObject};
 use crate::app::UniformHolder;
 
 type UniformBufferHolder = BTreeMap<u32, (Subbuffer<VertexData>, Subbuffer<FragmentData>)>;
@@ -143,12 +143,14 @@ impl RenderItems {
         let mut uniform_buffer_holder = UniformBufferHolder::new();
         let buf_alloc = common_items.uniform_buffer_allocator.clone();
 
-        for (id, scene_object) in scene_layout.scene_objects.get_iter() {
-            if scene_object.mesh_id.is_none() {
-                continue
+        for (id, scene_entity) in scene_layout.scene_entities.get_iter()
+        {
+            if let Some(scene_object) = scene_entity.downcast_ref::<SceneObject>()
+                && scene_object.mesh_id.is_some()
+            {
+                uniform_buffer_holder.insert(*id, (buf_alloc.allocate_sized().unwrap(),
+                                                   buf_alloc.allocate_sized().unwrap()));
             }
-            uniform_buffer_holder.insert(*id, (buf_alloc.allocate_sized().unwrap(),
-                                                             buf_alloc.allocate_sized().unwrap()));
         }
 
         RenderItems {
@@ -254,9 +256,13 @@ impl RenderItems {
             .set_viewport(0, [self.viewport.clone()].into_iter().collect()).unwrap()
             .bind_pipeline_graphics(self.pipeline.clone()).unwrap();
 
-        for (id, scene_object) in scene_layout.scene_objects.get_iter()
+        for (id, scene_entity) in scene_layout.scene_entities.get_iter()
         {
-            if scene_object.mesh_id.is_none() || scene_object.material.is_none() {
+            if scene_entity.downcast_ref::<SceneObject>().is_none() {
+                continue
+            }
+            let scene_object = scene_entity.downcast_ref::<SceneObject>().unwrap();
+            if scene_object.mesh_id.is_none() {
                 continue
             }
 

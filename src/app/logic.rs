@@ -26,11 +26,10 @@ pub struct LogicItems {
 }
 
 impl LogicItems {
-    
     pub fn get_frame_id(&self) -> u32 {
         self.frame_id
     }
-    
+
     pub fn increment_frame_id(&mut self) {
         self.frame_id += 1;
     }
@@ -84,8 +83,8 @@ impl LogicItems {
         if keys_down.contains(&ArrowLeft) {
             horizontal_angle_diff *= -1.0;
         }
-        
-        let camera = &mut scene_layout.camera;
+
+        let camera = scene_layout.get_camera_mut();
 
         if keys_down.contains(&ArrowUp) || keys_down.contains(&ArrowDown) {
             camera.position = camera.position.rotate_axis(camera.horizon, vertical_angle_diff);
@@ -114,39 +113,48 @@ impl LogicItems {
         self.handle_input(frame_duration, timing_items, scene_layout);
 
         let view_proj_matrix = make_view_proj_matrix(render_items, scene_layout);
-        walk_through_tree(&scene_layout.scene_tree, scene_layout,
+        Self::walk_through_tree(&scene_layout.scene_tree, scene_layout,
                           &view_proj_matrix, &Mat4::IDENTITY,
                           uniform_holder);
 
         self.keys_pressed.clear();
     }
-}
 
-fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
-                     view_proj_matrix: &Mat4, prev_model_matrix: &Mat4,
-                     uniform_holder: &mut UniformHolder)
-{
-    let cur_object = scene_layout.scene_objects.get(scene_tree.object_id);
-    let cur_model_matrix = prev_model_matrix * make_model_matrix(cur_object);
-    let cur_model_normals_matrix = cur_model_matrix.inverse().transpose();
-    let cur_mvp_matrix = view_proj_matrix * cur_model_matrix;
+    fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
+                         view_proj_matrix: &Mat4, prev_model_matrix: &Mat4,
+                         uniform_holder: &mut UniformHolder)
+    {
+        let cur_entity = scene_layout.scene_entities.get(scene_tree.entity_id);
+        if cur_entity.downcast_ref::<SceneObject>().is_none() {
+            if !scene_tree.children.is_empty() {
+                panic!("Only scene objects can have children")
+            }
+            return;
+        }
 
-    let vertex_data = VertexData {
-        view_proj: view_proj_matrix.to_cols_array_2d(),
-        model: cur_model_matrix.to_cols_array_2d(),
-        model_normals: cur_model_normals_matrix.to_cols_array_2d(),
-        model_view_proj: cur_mvp_matrix.to_cols_array_2d()
-    };
-    let fragment_data = FragmentData {
-        material: cur_object.material.unwrap_or_default().into(),
-        light_pos: scene_layout.light.position.to_array().into(),
-        camera_pos: scene_layout.camera.position.to_array().into(),
-    };
+        let cur_object = cur_entity.downcast_ref::<SceneObject>().unwrap();
 
-    uniform_holder.insert(cur_object.id, (vertex_data, fragment_data));
+        let cur_model_matrix = prev_model_matrix * make_model_matrix(cur_object);
+        let cur_model_normals_matrix = cur_model_matrix.inverse().transpose();
+        let cur_mvp_matrix = view_proj_matrix * cur_model_matrix;
 
-    for child in scene_tree.children.iter() {
-        walk_through_tree(child, scene_layout, view_proj_matrix, &cur_model_matrix, uniform_holder);
+        let vertex_data = VertexData {
+            view_proj: view_proj_matrix.to_cols_array_2d(),
+            model: cur_model_matrix.to_cols_array_2d(),
+            model_normals: cur_model_normals_matrix.to_cols_array_2d(),
+            model_view_proj: cur_mvp_matrix.to_cols_array_2d()
+        };
+        let fragment_data = FragmentData {
+            material: cur_object.material.unwrap_or_default().into(),
+            light_pos: scene_layout.get_light().position.to_array().into(),
+            camera_pos: scene_layout.get_camera().position.to_array().into(),
+        };
+
+        uniform_holder.insert(cur_object.id, (vertex_data, fragment_data));
+
+        for child in scene_tree.children.iter() {
+            Self::walk_through_tree(child, scene_layout, view_proj_matrix, &cur_model_matrix, uniform_holder);
+        }
     }
 }
 
@@ -161,7 +169,7 @@ fn make_view_proj_matrix(render_items: &RenderItems, scene_layout: &mut SceneLay
     );
 
     let view = Mat4::look_at_lh(
-        scene_layout.camera.position,
+        scene_layout.get_camera().position,
         Vec3::ZERO,
         Vec3::NEG_Y
     );
