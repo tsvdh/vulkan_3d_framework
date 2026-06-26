@@ -1,14 +1,25 @@
 use crate::app::rendering::RenderItems;
 use crate::app::scene::{Camera, Light, SceneEntity, SceneLayout, SceneObject, SceneTree};
 use crate::app::util::CommonItems;
-use egui::{Context, TextStyle, Ui, UiBuilder};
+use egui::{collapsing_header, Align, Context, Frame, Layout, MenuBar, Panel, RichText, TextStyle, Ui, UiBuilder};
 use egui_winit_vulkano::{Gui, GuiConfig};
 use vulkano::image::SampleCount;
 use winit::event_loop::ActiveEventLoop;
 
-#[derive(Default)]
 struct State {
-    selected_object_id: Option<u32>
+    selected_object_id: Option<u32>,
+    show_tree_panel: bool,
+    show_control_panel: bool,
+}
+
+impl State {
+    fn new() -> Self {
+        State {
+            selected_object_id: None,
+            show_tree_panel: true,
+            show_control_panel: false,
+        }
+    }
 }
 
 pub struct GuiItems {
@@ -47,7 +58,7 @@ impl GuiItems {
         
         GuiItems {
             gui,
-            state: Default::default(),
+            state: State::new(),
         }
     }
 
@@ -73,13 +84,16 @@ impl GuiItems {
 
         let mut ui = Ui::new(context.clone(), "ui".into(), UiBuilder::new());
 
-        // egui::Panel::top("topPanel").show_inside(&mut ui, |ui| {
-        //     egui::Button::selectable(true, "fileSelect").
-        // });
-
-        egui::Panel::left("treePanel")
-            .resizable(false)
+        Panel::top("menu")
             .show_inside(&mut ui, |ui| {
+                ui.menu_button("file", |ui| {
+
+                });
+            });
+
+        Panel::left("treePanel")
+            .resizable(false)
+            .show_animated_inside(&mut ui, self.state.show_tree_panel, |ui| {
                 ui.add_space(4.0);
                 ui.vertical_centered(|ui| {
                     ui.heading("Entity tree");
@@ -89,12 +103,12 @@ impl GuiItems {
                 self.walk_through_tree(scene_layout, &scene_layout.scene_tree, &context, ui);
             });
 
-        egui::Panel::right("controlPanel")
+        Panel::right("controlPanel")
             .resizable(false)
-            .show_inside(&mut ui, |ui| {
+            .show_animated_inside(&mut ui, self.state.show_control_panel, |ui| {
                 ui.add_space(4.0);
                 ui.vertical_centered(|ui| {
-                    ui.heading("Entity control")
+                    ui.heading("Entity control");
                 });
                 ui.separator();
 
@@ -103,6 +117,37 @@ impl GuiItems {
                 } else {
                     ui.label("Nothing selected :(");
                 }
+            });
+
+        Panel::top("controlBar")
+            .show_separator_line(false)
+            .frame(Frame::new().inner_margin(4))
+            .show_inside(&mut ui, |ui| {
+                MenuBar::new().ui(ui, |ui| {
+
+                    let tree_panel_toggle_text = if self.state.show_tree_panel {
+                        hex_to_emoji("23F4", 20.0)
+                    } else {
+                        hex_to_emoji("23F5", 20.0)
+                    };
+                    if ui.button(tree_panel_toggle_text).clicked() {
+                        self.state.show_tree_panel = !self.state.show_tree_panel;
+                    }
+
+                    let control_panel_toggle_text = if self.state.show_control_panel {
+                        hex_to_emoji("23F5", 20.0)
+                    } else {
+                        hex_to_emoji("23F4", 20.0)
+                    };
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui.button(control_panel_toggle_text).clicked() {
+                            self.state.show_control_panel = !self.state.show_control_panel;
+                            if !self.state.show_control_panel {
+                                self.state.selected_object_id = None;
+                            }
+                        }
+                    });
+                });
             });
     }
 
@@ -117,7 +162,13 @@ impl GuiItems {
             let object_selected = this.state.selected_object_id.is_some_and(
                 |id| { id == cur_object.get_id() });
             if ui.selectable_label(object_selected, cur_object.get_name()).clicked() {
-                this.state.selected_object_id = Some(cur_object.get_id());
+                if this.state.selected_object_id.is_some_and(|id| {id == cur_object.get_id()}) {
+                    this.state.selected_object_id = None;
+                    this.state.show_control_panel = false;
+                } else {
+                    this.state.selected_object_id = Some(cur_object.get_id());
+                    this.state.show_control_panel = true;
+                }
             }
         };
 
@@ -135,7 +186,7 @@ impl GuiItems {
         if scene_tree.children.is_empty() {
             show_item_label(self, ui);
         } else {
-            egui::collapsing_header::CollapsingState::load_with_default_open(&context, header_name.into(), false)
+            collapsing_header::CollapsingState::load_with_default_open(&context, header_name.into(), false)
                 .show_header(ui, |ui| {
                     show_item_label(self, ui);
                 })
@@ -170,4 +221,13 @@ impl ControlUi for Box<dyn SceneEntity> {
     fn ui(&mut self, ui: &mut Ui) {
         self.as_mut().ui(ui)
     }
+}
+
+fn hex_to_emoji(hex: &str, size: f32) -> RichText {
+    if let Ok(number) = u32::from_str_radix(hex, 16) {
+        if let Some(character) = std::char::from_u32(number) {
+            return RichText::new(character).size(size)
+        }
+    }
+    RichText::new("?").size(size)
 }
