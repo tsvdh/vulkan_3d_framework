@@ -8,12 +8,43 @@ pub mod vertex_shader_module {
 }
 
 pub mod fragment_shader_module {
+    use egui::{Align, DragValue, Layout, Ui};
     use serde::Deserialize;
+    use crate::app::ui::{vec3_drag_values_int_range, ControlUi};
 
     vulkano_shaders::shader! {
         ty: "fragment",
         path: "shaders/shader.frag",
         custom_derives: [Default, Copy, Clone, Deserialize],
         define: [("edit_id", "438adca3-5x8d-47bx-9938-8dxx57x2bx52")]
+    }
+
+    impl ControlUi for PhongComponent {
+        fn control_ui(&mut self, ui: &mut Ui) {
+            ui.horizontal(|ui| {
+                vec3_drag_values_int_range(ui, &mut self.color, 1.0, 0, 255);
+                ui.add_space(10.0);
+                ui.label("coef.: ");
+                ui.add(DragValue::new(&mut self.coefficient).speed(0.01).range(0..=1));
+            });
+        }
+    }
+
+    impl ControlUi for PhongMaterial {
+        fn control_ui(&mut self, ui: &mut Ui) {
+            ui.label("Ambient");
+            self.ambient.control_ui(ui);
+            ui.add_space(8.0);
+            ui.label("Diffuse");
+            self.diffuse.control_ui(ui);
+            ui.add_space(8.0);
+            ui.label("Specular");
+            self.specular.control_ui(ui);
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label("Shininess: ");
+                ui.add(DragValue::new(&mut self.shininess).speed(0.1).range(0..=1024));
+            });
+        }
     }
 }

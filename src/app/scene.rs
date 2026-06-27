@@ -1,13 +1,11 @@
 use crate::app::shader_modules::fragment_shader_module::PhongMaterial;
-use crate::app::ui::ControlUi;
+use crate::app::ui::{ControlUi, TreeHeadingUi};
 use crate::app::util::{CommonItems, MeshHolder, ObjectHolder};
 use downcast_rs::{impl_downcast, Downcast};
 use glam::Vec3;
 use serde::Deserialize;
-use std::collections::HashSet;
 use std::env;
 use std::fs::File;
-use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 // ----- Data holders -----
@@ -28,7 +26,7 @@ pub struct SceneLayout {
 
 pub struct SceneTree {
     pub entity_id: u32,
-    pub children: HashSet<SceneTree>
+    pub children: Vec<SceneTree>
 }
 
 #[derive(Deserialize)]
@@ -64,7 +62,7 @@ pub struct Camera {
     pub id: u32,
 
     pub position: Vec3,
-    pub look_at: Vec3,
+    // pub look_at: Vec3,
     pub horizon: Vec3,
 }
 
@@ -78,7 +76,7 @@ pub struct Light {
 
 // ----- Functionality -----
 
-pub trait SceneEntity : ControlUi + Downcast {
+pub trait SceneEntity : ControlUi + TreeHeadingUi + Downcast {
     fn get_id(&self) -> u32;
     fn set_id(&mut self, id: u32);
     fn get_name(&self) -> &str;
@@ -118,7 +116,6 @@ impl SceneEntity for Light {
         "light"
     }
 }
-
 impl SceneEntity for Box<dyn SceneEntity> {
     fn get_id(&self) -> u32 {
         self.as_ref().get_id()
@@ -131,24 +128,11 @@ impl SceneEntity for Box<dyn SceneEntity> {
     }
 }
 
-impl PartialEq for SceneTree {
-    fn eq(&self, other: &Self) -> bool {
-        self.entity_id == other.entity_id
-    }
-}
-impl Eq for SceneTree {}
-
-impl Hash for SceneTree {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.entity_id.hash(state);
-    }
-}
-
 impl SceneTree {
     fn new(entity_id: u32) -> Self {
         SceneTree {
             entity_id,
-            children: HashSet::new(),
+            children: Vec::new(),
         }
     }
 }
@@ -172,8 +156,8 @@ impl SceneLayoutConfig {
 
         let camera_id = scene_entities.add_with_id(Box::new(self.camera));
         let light_id = scene_entities.add_with_id(Box::new(self.light));
-        scene_tree_root.children.insert(SceneTree::new(camera_id));
-        scene_tree_root.children.insert(SceneTree::new(light_id));
+        scene_tree_root.children.push(SceneTree::new(camera_id));
+        scene_tree_root.children.push(SceneTree::new(light_id));
 
         let mut mesh_holder = MeshHolder::new();
 
@@ -238,7 +222,7 @@ impl SceneLayoutConfig {
             Self::walk_through_tree(&scene_object_config.children, common_items, scene_entities,
                                     &mut child_tree, mesh_holder, working_dir);
 
-            scene_tree.children.insert(child_tree);
+            scene_tree.children.push(child_tree);
         }
     }
 }
