@@ -233,18 +233,33 @@ impl ControlUi for Light {
     fn control_ui(&mut self, ui: &mut Ui, ) {
         ui.horizontal(|ui| {
             ui.label(hex_to_emoji(LIGHT_ICON_HEX, 20.0));
-            ui.label("Light")
+            ui.label(self.get_name());
         });
         ui.separator();
-        ui.label("Position");
-        vec3_drag_values(ui, &mut self.position.as_mut(), 0.1);
+        match self {
+            Light::Point { id: _, position } => {
+                ui.label("Position");
+                vec3_drag_values(ui, position.as_mut(), 0.1);
+
+            }
+            Light::Directional { id: _, direction } => {
+                ui.label("Direction");
+                let old_direction = direction.clone();
+                vec3_drag_values(ui, direction.as_mut(), 0.1);
+                if direction.length() == 0.0 {
+                    *direction = old_direction;
+                } else {
+                    *direction = direction.normalize();
+                }
+            }
+        }
     }
 }
 impl ControlUi for Camera {
     fn control_ui(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.label(hex_to_emoji(CAMERA_ICON_HEX, 20.0));
-            ui.label("Camera")
+            ui.label(self.get_name());
         });
         ui.separator();
         ui.label("Position");

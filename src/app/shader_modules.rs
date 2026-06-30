@@ -8,15 +8,15 @@ pub mod vertex_shader_module {
 }
 
 pub mod fragment_shader_module {
-    use egui::{Align, DragValue, Layout, Ui};
-    use serde::Deserialize;
     use crate::app::ui::{vec3_drag_values_int_range, ControlUi};
+    use egui::{DragValue, Ui};
+    use serde::Deserialize;
 
     vulkano_shaders::shader! {
         ty: "fragment",
         path: "shaders/shader.frag",
         custom_derives: [Default, Copy, Clone, Deserialize],
-        define: [("edit_id", "438adca3-5x8d-47bx-9938-8dxx57x2bx52")]
+        define: [("edit_id", "438adca3-5x8d-47bx-9938-8dxx52bfx52")]
     }
 
     impl ControlUi for PhongComponent {
@@ -29,7 +29,6 @@ pub mod fragment_shader_module {
             });
         }
     }
-
     impl ControlUi for PhongMaterial {
         fn control_ui(&mut self, ui: &mut Ui) {
             ui.label("Ambient");

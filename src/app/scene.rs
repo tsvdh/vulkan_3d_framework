@@ -1,4 +1,4 @@
-use crate::app::shader_modules::fragment_shader_module::PhongMaterial;
+use crate::app::shader_modules::fragment_shader_module::{DirectionalLight, PhongMaterial, PointLight};
 use crate::app::ui::{ControlUi, TreeHeadingUi};
 use crate::app::util::{CommonItems, MeshHolder, ObjectHolder};
 use downcast_rs::{impl_downcast, Downcast};
@@ -67,11 +67,18 @@ pub struct Camera {
 }
 
 #[derive(Deserialize)]
-pub struct Light {
-    #[serde(skip)]
-    pub id: u32,
-
-    pub position: Vec3,
+#[serde(tag = "type")]
+pub enum Light {
+    Point {
+        #[serde(skip)]
+        id: u32,
+        position: Vec3
+    },
+    Directional {
+        #[serde(skip)]
+        id: u32,
+        direction: Vec3
+    },
 }
 
 // ----- Functionality -----
@@ -102,18 +109,27 @@ impl SceneEntity for Camera {
         self.id = id
     }
     fn get_name(&self) -> &str {
-        "camera"
+        "Camera"
     }
 }
 impl SceneEntity for Light {
     fn get_id(&self) -> u32 {
-        self.id
+        match self {
+            Light::Point { id, .. } => { *id }
+            Light::Directional { id, .. } => { *id }
+        }
     }
-    fn set_id(&mut self, id: u32) {
-        self.id = id
+    fn set_id(&mut self, new_id: u32) {
+        match self {
+            Light::Point { id, .. } => { *id = new_id }
+            Light::Directional { id, .. } => { *id = new_id }
+        }
     }
     fn get_name(&self) -> &str {
-        "light"
+        match self {
+            Light::Point { .. } => { "Point light" }
+            Light::Directional { .. } => { "Directional light" }
+        }
     }
 }
 impl SceneEntity for Box<dyn SceneEntity> {
@@ -125,6 +141,30 @@ impl SceneEntity for Box<dyn SceneEntity> {
     }
     fn get_name(&self) -> &str {
         self.as_ref().get_name()
+    }
+}
+
+impl Light {
+    pub fn get_point_light(&self) -> PointLight {
+        match self {
+            Light::Point { id: _, position } => {
+                PointLight { position: position.to_array(), used: 1 }
+            }
+            Light::Directional { .. } => {
+                PointLight { position: [0.0, 0.0, 0.0], used: 0 }
+            }
+        }
+    }
+
+    pub fn get_directional_light(&self) -> DirectionalLight {
+        match self {
+            Light::Point { .. } => {
+                DirectionalLight { direction: [0.0, 0.0, 0.0], used: 0 }
+            }
+            Light::Directional { id: _, direction } => {
+                DirectionalLight { direction: direction.to_array(), used: 1 }
+            }
+        }
     }
 }
 
@@ -165,12 +205,14 @@ impl SceneLayoutConfig {
         Self::walk_through_tree(&self.scene_objects, common_items, &mut scene_entities,
                                 &mut scene_tree_root, &mut mesh_holder, &working_dir);
 
-        let scene_layout = SceneLayout {
+        let mut scene_layout = SceneLayout {
             camera_id,
             light_id,
             scene_entities,
             scene_tree: scene_tree_root
         };
+
+        scene_layout.after_parsing();
 
         (scene_layout, mesh_holder)
     }
@@ -247,5 +289,14 @@ impl SceneLayout {
     pub fn get_light_mut(&mut self) -> &mut Light {
         self.scene_entities.get_mut(self.light_id)
             .downcast_mut().unwrap()
+    }
+
+    fn after_parsing(&mut self) {
+        match self.get_light_mut() {
+            Light::Point { .. } => {}
+            Light::Directional { id: _, direction } => {
+                *direction = direction.normalize();
+            }
+        }
     }
 }

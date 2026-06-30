@@ -5,7 +5,8 @@
     "horizon": [1, 0, 0]
   },
   "light": {
-    "position": [0, 10, 0]
+    "type": "Directional",
+    "direction": [0, -10, 0]
   },
   "scene_objects": [
     {

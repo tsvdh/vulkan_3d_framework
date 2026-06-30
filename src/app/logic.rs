@@ -1,6 +1,6 @@
 use crate::app::rendering::RenderItems;
 use crate::app::scene::{SceneLayout, SceneObject, SceneTree};
-use crate::app::shader_modules::fragment_shader_module::FragmentData;
+use crate::app::shader_modules::fragment_shader_module::{FragmentData, Lights, PointLight};
 use crate::app::shader_modules::vertex_shader_module::VertexData;
 use crate::app::timing::TimingItems;
 use glam::{Mat4, Quat, Vec3};
@@ -113,16 +113,22 @@ impl LogicItems {
         self.handle_input(frame_duration, timing_items, scene_layout);
 
         let view_proj_matrix = make_view_proj_matrix(render_items, scene_layout);
+        let f_lights = Lights {
+            point_light: scene_layout.get_light().get_point_light(),
+            directional_light: scene_layout.get_light().get_directional_light(),
+        };
         Self::walk_through_tree(&scene_layout.scene_tree, scene_layout,
-                          &view_proj_matrix, &Mat4::IDENTITY,
-                          uniform_holder);
+                                &view_proj_matrix, &Mat4::IDENTITY,
+                                uniform_holder,
+                                &f_lights, &scene_layout.get_camera().position.to_array());
 
         self.keys_pressed.clear();
     }
 
     fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
                          view_proj_matrix: &Mat4, prev_model_matrix: &Mat4,
-                         uniform_holder: &mut UniformHolder)
+                         uniform_holder: &mut UniformHolder,
+                         f_lights: &Lights, f_camera_pos: &[f32; 3])
     {
         let cur_entity = scene_layout.scene_entities.get(scene_tree.entity_id);
         if cur_entity.downcast_ref::<SceneObject>().is_none() {
@@ -146,14 +152,15 @@ impl LogicItems {
         };
         let fragment_data = FragmentData {
             material: cur_object.material.unwrap_or_default().into(),
-            light_pos: scene_layout.get_light().position.to_array().into(),
-            camera_pos: scene_layout.get_camera().position.to_array().into(),
+            lights: *f_lights,
+            camera_pos: *f_camera_pos,
         };
 
         uniform_holder.insert(cur_object.id, (vertex_data, fragment_data));
 
         for child in scene_tree.children.iter() {
-            Self::walk_through_tree(child, scene_layout, view_proj_matrix, &cur_model_matrix, uniform_holder);
+            Self::walk_through_tree(child, scene_layout, view_proj_matrix, &cur_model_matrix,
+                                    uniform_holder, f_lights, f_camera_pos);
         }
     }
 }
