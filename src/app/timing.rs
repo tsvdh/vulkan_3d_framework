@@ -211,7 +211,7 @@ impl FrameComponentDurations {
 
 impl Display for FrameComponentDurations {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "gpu prep: {}, render cpu: {}, render gpu {}, ui: {}, base logic: {}, async logic: {}",
+        write!(f, "gpu prep: {}, render cpu: {}, render gpu: {}, ui: {}, base logic: {}, async logic: {}",
                Self::display_duration(self.gpu_prep_duration),
                Self::display_duration(self.render_cpu_duration),
                Self::display_duration(self.render_gpu_duration),

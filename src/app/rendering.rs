@@ -18,7 +18,7 @@ use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorB
 use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
-use vulkano::pipeline::graphics::rasterization::RasterizationState;
+use vulkano::pipeline::graphics::rasterization::{CullMode, RasterizationState};
 use vulkano::pipeline::graphics::subpass::PipelineRenderingCreateInfo;
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
@@ -117,7 +117,10 @@ impl RenderItems {
                     vertex_input_state: Some(vertex_input_state),
                     input_assembly_state: Some(InputAssemblyState::default()),
                     viewport_state: Some(ViewportState::default()),
-                    rasterization_state: Some(RasterizationState::default()),
+                    rasterization_state: Some(RasterizationState {
+                        cull_mode: CullMode::Back,
+                        ..Default::default()
+                    }),
                     depth_stencil_state: Some(DepthStencilState {
                         depth: Some(DepthState::simple()),
                         ..Default::default()

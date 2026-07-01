@@ -10,6 +10,15 @@
   },
   "scene_objects": [
     {
+      "name": "plane",
+      "translation": [0, -1, 0],
+      "rotation": [0, 0, 0],
+      "scale": [10, 10, 10],
+      "mesh_path": "plane.obj",
+      "material_path": "default.json",
+      "children": []
+    },
+    {
       "name": "grey_bunnies",
       "translation": [1, 0, 0],
       "rotation": [0, 0, 0],
