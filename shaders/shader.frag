@@ -64,8 +64,8 @@ void main() {
      float diffuse_power = max(dot(f_normal, light_dir), 0);
      float specular_power = 0;
      if (diffuse_power > 0) {
-          vec3 refl_light_dir = reflect(-light_dir, f_normal);
-          specular_power = max(dot(camera_dir, refl_light_dir), 0);
+          vec3 halfway = normalize(light_dir + camera_dir);
+          specular_power = max(dot(f_normal, halfway), 0);
           specular_power = pow(specular_power, uniforms.material.shininess);
      }
 

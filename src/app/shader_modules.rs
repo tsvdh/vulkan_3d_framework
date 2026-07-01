@@ -16,7 +16,7 @@ pub mod fragment_shader_module {
         ty: "fragment",
         path: "shaders/shader.frag",
         custom_derives: [Default, Copy, Clone, Deserialize],
-        define: [("edit_id", "438adca3-5x8d-47bx-9938-8dxx52bfx52")]
+        define: [("edit_id", "55x5c7x1-3ba1-481x-acxx-x4xccxaxab68")]
     }
 
     impl ControlUi for PhongComponent {
