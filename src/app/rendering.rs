@@ -35,7 +35,7 @@ use vulkano::{Validated, VulkanError};
 use vulkano::image::sampler::{Sampler, SamplerCreateInfo};
 use winit::window::Window;
 
-const SHADOW_MAP_EXTENT: [u32; 2] = [1000, 1000];
+const SHADOW_MAP_EXTENT: [u32; 2] = [2048, 2048];
 
 type UniformBufferHolder = BTreeMap<u32,
     (Subbuffer<ShadowVertexData>, Subbuffer<RenderVertexData>, Subbuffer<RenderFragmentData>)>;
@@ -129,7 +129,10 @@ impl RenderItems {
                     vertex_input_state: Some(vertex_input_state),
                     input_assembly_state: Some(InputAssemblyState::default()),
                     viewport_state: Some(ViewportState::default()),
-                    rasterization_state: Some(RasterizationState::default()),
+                    rasterization_state: Some(RasterizationState {
+                        cull_mode: CullMode::None,
+                        ..Default::default()
+                    }),
                     depth_stencil_state: Some(DepthStencilState {
                         depth: Some(DepthState::simple()),
                         ..Default::default()

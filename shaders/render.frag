@@ -58,12 +58,15 @@ vec3 get_light_dir(Lights lights, vec3 position) {
      }
 }
 
-float get_shadow(vec4 f_position_light) {
+float get_shadow(vec4 f_position_light, vec3 light_dir) {
      vec3 proj_position = f_position_light.xyz / f_position_light.w;
      float point_depth = proj_position.z;
      vec2 proj_coords = proj_position.xy * 0.5 + 0.5;
      float shadow_map_depth = texture(shadow_map, proj_coords).x;
-     return point_depth <= (shadow_map_depth + 0.001) ? 1.0 : 0.0;
+
+     float bias = max(0.05 * (1 - dot(light_dir, f_normal)), 0.005);
+
+     return point_depth <= (shadow_map_depth + 0.005) ? 1.0 : 0.2;
 }
 
 // ------
@@ -96,12 +99,13 @@ void main() {
      PhongComponent diffuse = uniforms.material.diffuse;
      PhongComponent specular = uniforms.material.specular;
 
-     float shadow = get_shadow(f_position_light);
+     float diffuse_shadow = get_shadow(f_position_light, light_dir);
+     float specular_shadow = diffuse_shadow < 1.0 ? 0.0 : 1.0;
 
      f_color = vec4(
           ambient.color / 255 * ambient.coefficient
-          + diffuse.color / 255 * diffuse.coefficient * diffuse_power * shadow
-          + specular.color / 255 * specular.coefficient * specular_power * shadow,
+          + diffuse.color / 255 * diffuse.coefficient * diffuse_power * diffuse_shadow
+          + specular.color / 255 * specular.coefficient * specular_power * specular_shadow,
           1.0
      );
 }

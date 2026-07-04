@@ -192,14 +192,13 @@ fn make_view_proj_camera_matrix(render_items: &RenderItems, scene_layout: &Scene
 fn make_view_proj_light_matrix(scene_layout: &SceneLayout) -> Mat4 {
     match scene_layout.get_light() {
         Light::Point { .. } => {
-            panic!()
+            panic!("Point light not implemented yet")
         }
         Light::Directional { direction, .. } => {
-            // todo
-            let projection = Mat4::orthographic_lh(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0);
-            let view = Mat4::look_to_lh(Vec3::new(0.0, 0.0, 0.0), Vec3::NEG_Y, Vec3::NEG_Z);
+            let box_size = 10f32;
+            let projection = Mat4::orthographic_lh(-box_size, box_size, -box_size, box_size, -box_size, box_size);
+            let view = Mat4::look_to_lh(Vec3::ZERO, *direction, direction.any_orthonormal_vector());
             projection * view
-
         }
     }
 }
