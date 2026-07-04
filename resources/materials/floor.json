@@ -1,0 +1,16 @@
+{
+  "name": "floor",
+  "ambient": {
+    "color": [255, 255, 255],
+    "coefficient": 0.05
+  },
+  "diffuse": {
+    "color": [255, 255, 255],
+    "coefficient": 0.41
+  },
+  "specular": {
+    "color": [255, 255, 255],
+    "coefficient": 0.1
+  },
+  "shininess": 300
+}

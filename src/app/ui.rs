@@ -1,7 +1,7 @@
 use crate::app::rendering::RenderItems;
 use crate::app::scene::{Camera, Light, SceneEntity, SceneLayout, SceneObject, SceneTree};
 use crate::app::util::CommonItems;
-use egui::{collapsing_header, Align, Atoms, Button, Context, DragValue, Frame, Layout, MenuBar, Panel, RichText, TextStyle, Ui, UiBuilder};
+use egui::{collapsing_header, Align, Atoms, Context, DragValue, Frame, Layout, MenuBar, Panel, RichText, TextStyle, Ui, UiBuilder};
 use egui_winit_vulkano::{Gui, GuiConfig};
 use vulkano::image::SampleCount;
 use winit::event_loop::ActiveEventLoop;
@@ -95,7 +95,7 @@ impl GuiItems {
 
         Panel::top("menu")
             .show_inside(&mut ui, |ui| {
-                ui.menu_button("file", |ui| {
+                ui.menu_button("file", |_ui| {
 
                 });
             });
@@ -245,7 +245,7 @@ impl ControlUi for Light {
             Light::Directional { id: _, direction } => {
                 ui.label("Direction");
                 let old_direction = direction.clone();
-                vec3_drag_values(ui, direction.as_mut(), 0.1);
+                vec3_drag_values(ui, direction.as_mut(), 0.01);
                 if direction.length() == 0.0 {
                     *direction = old_direction;
                 } else {

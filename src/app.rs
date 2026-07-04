@@ -9,13 +9,14 @@ mod util;
 use crate::app::logic::LogicItems;
 use crate::app::rendering::RenderItems;
 use crate::app::scene::{SceneLayout, SceneLayoutConfig};
-use crate::app::shader_modules::fragment_shader_module::FragmentData;
-use crate::app::shader_modules::vertex_shader_module::VertexData;
+use crate::app::shader_modules::fs_mod_render::RenderFragmentData;
+use crate::app::shader_modules::vs_mod_render::RenderVertexData;
+use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
 use crate::app::timing::TimingItems;
 use crate::app::ui::GuiItems;
 use crate::app::util::{get_common_vulkan_items, CommonItems, InitOption, MeshHolder};
 use serde::Deserialize;
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::sync::Arc;
 use std::time::Instant;
@@ -33,7 +34,7 @@ pub struct Config {
     pub show_frame_times: bool,
 }
 
-type UniformHolder = BTreeMap<u32, (VertexData, FragmentData)>;
+type UniformHolder = BTreeMap<u32, (ShadowVertexData, RenderVertexData, RenderFragmentData)>;
 
 pub struct App {
     config: Config,

@@ -1,4 +1,4 @@
-use crate::app::shader_modules::fragment_shader_module::{DirectionalLight, PhongMaterial, PointLight};
+use crate::app::shader_modules::fs_mod_render::{DirectionalLight, PhongMaterial, PointLight};
 use crate::app::ui::{ControlUi, TreeHeadingUi};
 use crate::app::util::{CommonItems, MeshHolder, ObjectHolder};
 use downcast_rs::{impl_downcast, Downcast};

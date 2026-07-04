@@ -1,7 +1,7 @@
 use crate::app::rendering::RenderItems;
-use crate::app::scene::{SceneLayout, SceneObject, SceneTree};
-use crate::app::shader_modules::fragment_shader_module::{FragmentData, Lights, PointLight};
-use crate::app::shader_modules::vertex_shader_module::VertexData;
+use crate::app::scene::{Light, SceneLayout, SceneObject, SceneTree};
+use crate::app::shader_modules::fs_mod_render::{RenderFragmentData, Lights};
+use crate::app::shader_modules::vs_mod_render::RenderVertexData;
 use crate::app::timing::TimingItems;
 use glam::{Mat4, Quat, Vec3};
 use std::collections::BTreeSet;
@@ -9,6 +9,7 @@ use std::f32::consts::FRAC_PI_2;
 use winit::event::KeyEvent;
 use winit::keyboard::KeyCode::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp, KeyT, PageDown, PageUp};
 use winit::keyboard::{KeyCode, PhysicalKey};
+use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
 use crate::app::UniformHolder;
 use crate::app::util::{radians_from_degrees};
 
@@ -112,13 +113,14 @@ impl LogicItems {
         let frame_duration = timing_items.get_frame_duration();
         self.handle_input(frame_duration, timing_items, scene_layout);
 
-        let view_proj_matrix = make_view_proj_matrix(render_items, scene_layout);
+        let view_proj_camera_matrix = make_view_proj_camera_matrix(render_items, scene_layout);
+        let view_proj_light_matrix = make_view_proj_light_matrix(scene_layout);
         let f_lights = Lights {
             point_light: scene_layout.get_light().get_point_light(),
             directional_light: scene_layout.get_light().get_directional_light(),
         };
         Self::walk_through_tree(&scene_layout.scene_tree, scene_layout,
-                                &view_proj_matrix, &Mat4::IDENTITY,
+                                &view_proj_camera_matrix, &view_proj_light_matrix, &Mat4::IDENTITY,
                                 uniform_holder,
                                 &f_lights, &scene_layout.get_camera().position.to_array());
 
@@ -126,7 +128,7 @@ impl LogicItems {
     }
 
     fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
-                         view_proj_matrix: &Mat4, prev_model_matrix: &Mat4,
+                         view_proj_camera_matrix: &Mat4, view_proj_light_matrix: &Mat4, prev_model_matrix: &Mat4,
                          uniform_holder: &mut UniformHolder,
                          f_lights: &Lights, f_camera_pos: &[f32; 3])
     {
@@ -142,37 +144,40 @@ impl LogicItems {
 
         let cur_model_matrix = prev_model_matrix * make_model_matrix(cur_object);
         let cur_model_normals_matrix = cur_model_matrix.inverse().transpose();
-        let cur_mvp_matrix = view_proj_matrix * cur_model_matrix;
+        let cur_mvp_light_matrix = view_proj_light_matrix * cur_model_matrix;
 
-        let vertex_data = VertexData {
-            view_proj: view_proj_matrix.to_cols_array_2d(),
+        let shadow_vertex_data = ShadowVertexData {
+            mvp_light: cur_mvp_light_matrix.to_cols_array_2d(),
+        };
+        let render_vertex_data = RenderVertexData {
             model: cur_model_matrix.to_cols_array_2d(),
             model_normals: cur_model_normals_matrix.to_cols_array_2d(),
-            model_view_proj: cur_mvp_matrix.to_cols_array_2d()
+            view_proj_camera: view_proj_camera_matrix.to_cols_array_2d(),
+            view_proj_light: view_proj_light_matrix.to_cols_array_2d(),
         };
-        let fragment_data = FragmentData {
+        let render_fragment_data = RenderFragmentData {
             material: cur_object.material.unwrap_or_default().into(),
             lights: *f_lights,
             camera_pos: *f_camera_pos,
         };
 
-        uniform_holder.insert(cur_object.id, (vertex_data, fragment_data));
+        uniform_holder.insert(cur_object.id, (shadow_vertex_data, render_vertex_data, render_fragment_data));
 
         for child in scene_tree.children.iter() {
-            Self::walk_through_tree(child, scene_layout, view_proj_matrix, &cur_model_matrix,
-                                    uniform_holder, f_lights, f_camera_pos);
+            Self::walk_through_tree(child, scene_layout, view_proj_camera_matrix, view_proj_light_matrix,
+                                    &cur_model_matrix, uniform_holder, f_lights, f_camera_pos);
         }
     }
 }
 
-fn make_view_proj_matrix(render_items: &RenderItems, scene_layout: &mut SceneLayout) -> Mat4 {
+fn make_view_proj_camera_matrix(render_items: &RenderItems, scene_layout: &SceneLayout) -> Mat4 {
     let image_extent = render_items.swapchain.image_extent();
     let aspect_ratio = image_extent[0] as f32 / image_extent[1] as f32;
     let projection = Mat4::perspective_lh(
         radians_from_degrees(65.0),
         aspect_ratio,
         0.1,
-        1000.0
+        100.0
     );
 
     let view = Mat4::look_at_lh(
@@ -182,6 +187,21 @@ fn make_view_proj_matrix(render_items: &RenderItems, scene_layout: &mut SceneLay
     );
 
     projection * view
+}
+
+fn make_view_proj_light_matrix(scene_layout: &SceneLayout) -> Mat4 {
+    match scene_layout.get_light() {
+        Light::Point { .. } => {
+            panic!()
+        }
+        Light::Directional { direction, .. } => {
+            // todo
+            let projection = Mat4::orthographic_lh(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0);
+            let view = Mat4::look_to_lh(Vec3::new(0.0, 0.0, 0.0), Vec3::NEG_Y, Vec3::NEG_Z);
+            projection * view
+
+        }
+    }
 }
 
 fn make_model_matrix(scene_object: &SceneObject) -> Mat4 {

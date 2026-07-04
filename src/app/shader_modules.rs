@@ -1,22 +1,39 @@
-pub mod vertex_shader_module {
+pub mod vs_mod_shadow {
     vulkano_shaders::shader! {
         ty: "vertex",
-        path: "shaders/shader.vert",
+        path: "shaders/shadow.vert",
         custom_derives: [Default, Copy, Clone],
-        define: [("edit_id", "x45x777x-x8c5-48xd-b563-32x68cx3526d")]
+        define: [("edit_id", "91aaxxd3-5aac-4cb9-9818-84b88x4124b8")]
     }
 }
 
-pub mod fragment_shader_module {
+pub mod fs_mod_shadow {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "shaders/shadow.frag",
+        define: [("edit_id", "x45x777x-x8c5-48xd-b563-bbb")]
+    }
+}
+
+pub mod vs_mod_render {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "shaders/render.vert",
+        custom_derives: [Default, Copy, Clone],
+        define: [("edit_id", "x45x777x-x8c5-48xd-b563-cc")]
+    }
+}
+
+pub mod fs_mod_render {
     use crate::app::ui::{vec3_drag_values_int_range, ControlUi};
     use egui::{DragValue, Ui};
     use serde::Deserialize;
 
     vulkano_shaders::shader! {
         ty: "fragment",
-        path: "shaders/shader.frag",
+        path: "shaders/render.frag",
         custom_derives: [Default, Copy, Clone, Deserialize],
-        define: [("edit_id", "55x5c7x1-3ba1-481x-acxx-x4xccxaxab68")]
+        define: [("edit_id", "323dxdxc-b2x1-48d3-b259-bd83976x54bx")]
     }
 
     impl ControlUi for PhongComponent {

@@ -1,6 +1,6 @@
 [package]
 name = "vulkan_3d_framework"
-version = "0.0.10"
+version = "0.0.11"
 edition = "2024"
 
 [dependencies]
