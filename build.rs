@@ -5,6 +5,7 @@ use convert_case::{Case, Casing};
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/scripts");
 
     let mut block = Block::new("match name");
     fs::read_dir("src/scripts").unwrap()
@@ -15,14 +16,15 @@ fn main() {
                 .replace('"', "");
             let script_name = file_name.to_case(Case::Pascal);
 
-            block.line(format!("\"{}\" => {{ Box::new(crate::scripts::{}::{} {{}}) }}", file_name, file_name, script_name).as_str());
+            block.line(format!("\"{}\" => {{ Box::new(crate::scripts::{}::{}::new(args)) }}", file_name, file_name, script_name).as_str());
         });
     block.line("_ => { panic!(\"File '{}' not found\", name); }");
 
     let mut scope = Scope::new();
-    scope.import("crate::scripts", "Script");
     scope.new_fn("get_script")
+        .vis("pub")
         .arg("name", "&str")
+        .arg("args", "serde_json::Value")
         .ret("Box<dyn Script>")
         .push_block(block);
 

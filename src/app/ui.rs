@@ -109,7 +109,7 @@ impl GuiItems {
                 });
                 ui.separator();
 
-                self.walk_through_tree(scene_layout, &scene_layout.scene_tree, &context, ui);
+                self.walk_through_tree(scene_layout, &scene_layout.scene_tree_root, &context, ui);
             });
 
         Panel::right("controlPanel")

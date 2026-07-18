@@ -1,0 +1,34 @@
+use log::info;
+use serde::Deserialize;
+use crate::app::script_api::AppApi;
+use crate::scripts::{convert_args, Script};
+
+#[derive(Deserialize)]
+struct Args {
+    message: String,
+}
+
+pub struct Test {
+    args: Args,
+    said_hello: bool,
+}
+
+impl Test {
+    pub fn new(args: serde_json::Value) -> Self {
+        Test {
+            args: convert_args(args),
+            said_hello: false,
+        }
+    }
+}
+
+impl Script for Test {
+
+    fn frame_update(&mut self, api: &mut AppApi) {
+        if !self.said_hello {
+            self.said_hello = true;
+            info!("Hello from script!");
+            info!("You said: {}", self.args.message);
+        }
+    }
+}

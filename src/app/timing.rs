@@ -1,5 +1,6 @@
 use crate::app::logic::LogicItems;
 use crate::app::util::InitOption;
+use crate::app::Config;
 use log::info;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
@@ -9,7 +10,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
-use crate::app::Config;
 
 type GpuFence = FenceSignalFuture<Box<dyn GpuFuture + Send>>;
 

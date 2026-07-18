@@ -5,6 +5,7 @@ mod shader_modules;
 mod timing;
 mod ui;
 mod util;
+pub mod script_api;
 
 use crate::app::logic::LogicItems;
 use crate::app::rendering::RenderItems;
@@ -27,6 +28,7 @@ use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
+use crate::app::script_api::{AppApi, LogicApi, SceneApi, TimingApi};
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -99,6 +101,14 @@ impl App {
             uniform_holder: UniformHolder::new(),
         }
     }
+    
+    fn get_api() -> AppApi {
+        AppApi {
+            logic_api: LogicApi {},
+            scene_api: SceneApi {},
+            timing_api: TimingApi {},
+        }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -123,8 +133,9 @@ impl ApplicationHandler for App {
 
         // first frame render prep
         self.gui_items.build_ui(&mut self.scene_layout);
-        self.logic_items.base_logic(&mut self.timing_items, &self.render_items,
-                                    &mut self.scene_layout, &mut self.uniform_holder);
+        let mut app_api = Self::get_api();
+        self.logic_items.base_logic(&mut self.timing_items, &self.render_items, 
+                                    &mut self.scene_layout, &mut self.uniform_holder, &mut app_api);
 
         window.set_visible(true);
     }
@@ -186,11 +197,13 @@ impl ApplicationHandler for App {
                 self.timing_items.frame_component_durations.ui_duration = Some(ui_start.elapsed());
 
                 let logic_start = Instant::now();
+                let mut app_api = Self::get_api();
                 self.logic_items.base_logic(
                     &mut self.timing_items,
                     &self.render_items,
                     &mut self.scene_layout,
-                    &mut self.uniform_holder
+                    &mut self.uniform_holder,
+                    &mut app_api
                 );
                 self.timing_items.frame_component_durations.base_logic_duration = Some(logic_start.elapsed());
             }

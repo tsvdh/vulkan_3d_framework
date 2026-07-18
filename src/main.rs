@@ -1,10 +1,8 @@
 mod app;
-mod scripts;
+pub mod scripts;
 
 use crate::app::App;
 
-include!(concat!(env!("OUT_DIR"), "/get_script.rs"));
-
 fn main() {
-    get_script("script_a");
+    App::start();
 }

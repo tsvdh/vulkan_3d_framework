@@ -7,7 +7,7 @@ use serde::Deserialize;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
-
+use crate::scripts::{get_script, Script};
 // ----- Data holders -----
 
 #[derive(Deserialize)]
@@ -21,7 +21,7 @@ pub struct SceneLayout {
     pub camera_id: u32,
     pub light_id: u32,
     pub scene_entities: ObjectHolder<Box<dyn SceneEntity>>,
-    pub scene_tree: SceneTree,
+    pub scene_tree_root: SceneTree,
 }
 
 pub struct SceneTree {
@@ -41,6 +41,9 @@ pub struct SceneObjectConfig {
     #[serde(default)]
     pub material_path: Option<String>,
 
+    #[serde(default)]
+    pub script: Option<ScriptConfig>,
+
     pub children: Vec<SceneObjectConfig>
 }
 
@@ -54,6 +57,8 @@ pub struct SceneObject {
 
     pub mesh_id: Option<u32>,
     pub material: Option<PhongMaterial>,
+
+    pub script: Option<Box<dyn Script>>,
 }
 
 #[derive(Deserialize)]
@@ -79,6 +84,12 @@ pub enum Light {
         id: u32,
         direction: Vec3
     },
+}
+
+#[derive(Deserialize)]
+pub struct ScriptConfig {
+    name: String,
+    args: serde_json::Value,
 }
 
 // ----- Functionality -----
@@ -187,6 +198,7 @@ impl SceneLayoutConfig {
             scale: Vec3::ONE,
             mesh_id: None,
             material: None,
+            script: None,
         };
 
         let mut scene_entities: ObjectHolder<Box<dyn SceneEntity>> = ObjectHolder::new();
@@ -209,7 +221,7 @@ impl SceneLayoutConfig {
             camera_id,
             light_id,
             scene_entities,
-            scene_tree: scene_tree_root
+            scene_tree_root: scene_tree_root
         };
 
         scene_layout.after_parsing();
@@ -237,25 +249,28 @@ impl SceneLayoutConfig {
                 scale: scene_object_config.scale,
                 mesh_id: None,
                 material: None,
+                script: None,
             };
 
-            if scene_object_config.mesh_path.is_some() {
-                let mesh_name = scene_object_config.mesh_path.clone().unwrap();
-                let mesh_path = working_dir.join("resources/meshes").join(mesh_name.clone());
+            if let Some(mesh_name) = scene_object_config.mesh_path.as_ref() {
+                let mesh_path = working_dir.join("resources/meshes").join(mesh_name);
 
                 if !mesh_holder.has_name(&mesh_name) {
-                    let mesh_id = mesh_holder.load_and_add_mesh(mesh_name, &mesh_path, common_items);
+                    let mesh_id = mesh_holder.load_and_add_mesh(mesh_name.clone(), &mesh_path, common_items);
                     scene_object.mesh_id = Some(mesh_id);
                 } else {
-                    scene_object.mesh_id = Some(mesh_holder.get_id(&mesh_name));
+                    scene_object.mesh_id = Some(mesh_holder.get_id(mesh_name));
                 }
             }
 
-            if scene_object_config.material_path.is_some() {
-                let material_name = scene_object_config.material_path.as_ref().unwrap();
+            if let Some(material_name) = scene_object_config.material_path.as_ref() {
                 let material_path = working_dir.join("resources/materials").join(material_name);
                 scene_object.material = serde_json::from_reader(File::open(material_path).unwrap())
                     .expect("Incorrect material file");
+            }
+
+            if let Some(script_config) = scene_object_config.script.as_ref() {
+                scene_object.script = Some(get_script(script_config.name.as_str(), script_config.args.clone()));
             }
 
             let entity_id = scene_entities.add_with_id(Box::new(scene_object));

@@ -1,5 +1,5 @@
 use crate::app::rendering::RenderItems;
-use crate::app::scene::{Light, SceneLayout, SceneObject, SceneTree};
+use crate::app::scene::{Light, SceneEntity, SceneLayout, SceneObject, SceneTree};
 use crate::app::shader_modules::fs_mod_render::{RenderFragmentData, Lights};
 use crate::app::shader_modules::vs_mod_render::RenderVertexData;
 use crate::app::timing::TimingItems;
@@ -9,9 +9,10 @@ use std::f32::consts::FRAC_PI_2;
 use winit::event::KeyEvent;
 use winit::keyboard::KeyCode::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp, KeyT, PageDown, PageUp};
 use winit::keyboard::{KeyCode, PhysicalKey};
+use crate::app::script_api::AppApi;
 use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
 use crate::app::UniformHolder;
-use crate::app::util::{radians_from_degrees};
+use crate::app::util::{radians_from_degrees, ObjectHolder};
 
 pub struct LogicItems {
     // public
@@ -108,7 +109,8 @@ impl LogicItems {
                       timing_items: &mut TimingItems,
                       render_items: &RenderItems,
                       scene_layout: &mut SceneLayout,
-                      uniform_holder: &mut UniformHolder
+                      uniform_holder: &mut UniformHolder,
+                      app_api: &mut AppApi,
     ) {
         let frame_duration = timing_items.get_frame_duration();
         self.handle_input(frame_duration, timing_items, scene_layout);
@@ -119,20 +121,24 @@ impl LogicItems {
             point_light: scene_layout.get_light().get_point_light(),
             directional_light: scene_layout.get_light().get_directional_light(),
         };
-        Self::walk_through_tree(&scene_layout.scene_tree, scene_layout,
-                                &view_proj_camera_matrix, &view_proj_light_matrix, &Mat4::IDENTITY,
-                                uniform_holder,
-                                &f_lights, &scene_layout.get_camera().position.to_array());
+
+        Self::walk_through_tree_scripts(&scene_layout.scene_tree_root, &mut scene_layout.scene_entities,
+                                        app_api);
+
+        Self::walk_through_tree_uniforms(&scene_layout.scene_tree_root, &scene_layout.scene_entities,
+                                         &view_proj_camera_matrix, &view_proj_light_matrix, &Mat4::IDENTITY,
+                                         uniform_holder,
+                                         &f_lights, &scene_layout.get_camera().position.to_array(), );
 
         self.keys_pressed.clear();
     }
 
-    fn walk_through_tree(scene_tree: &SceneTree, scene_layout: &SceneLayout,
-                         view_proj_camera_matrix: &Mat4, view_proj_light_matrix: &Mat4, prev_model_matrix: &Mat4,
-                         uniform_holder: &mut UniformHolder,
-                         f_lights: &Lights, f_camera_pos: &[f32; 3])
-    {
-        let cur_entity = scene_layout.scene_entities.get(scene_tree.entity_id);
+    fn walk_through_tree_uniforms(scene_tree: &SceneTree, scene_entities: &ObjectHolder<Box<dyn SceneEntity>>,
+                                  view_proj_camera_matrix: &Mat4, view_proj_light_matrix: &Mat4, prev_model_matrix: &Mat4,
+                                  uniform_holder: &mut UniformHolder,
+                                  f_lights: &Lights, f_camera_pos: &[f32; 3]
+    ) {
+        let cur_entity = scene_entities.get(scene_tree.entity_id);
         if cur_entity.downcast_ref::<SceneObject>().is_none() {
             if !scene_tree.children.is_empty() {
                 panic!("Only scene objects can have children")
@@ -164,8 +170,30 @@ impl LogicItems {
         uniform_holder.insert(cur_object.id, (shadow_vertex_data, render_vertex_data, render_fragment_data));
 
         for child in scene_tree.children.iter() {
-            Self::walk_through_tree(child, scene_layout, view_proj_camera_matrix, view_proj_light_matrix,
-                                    &cur_model_matrix, uniform_holder, f_lights, f_camera_pos);
+            Self::walk_through_tree_uniforms(child, scene_entities, view_proj_camera_matrix, view_proj_light_matrix,
+                                             &cur_model_matrix, uniform_holder, f_lights, f_camera_pos);
+        }
+    }
+
+    fn walk_through_tree_scripts(scene_tree: &SceneTree, scene_entities: &mut ObjectHolder<Box<dyn SceneEntity>>,
+                                 app_api: &mut AppApi)
+    {
+        let cur_entity = scene_entities.get_mut(scene_tree.entity_id);
+        if cur_entity.downcast_ref::<SceneObject>().is_none() {
+            if !scene_tree.children.is_empty() {
+                panic!("Only scene objects can have children")
+            }
+            return;
+        }
+
+        let cur_object = cur_entity.downcast_mut::<SceneObject>().unwrap();
+
+        if let Some(script) = cur_object.script.as_mut() {
+            script.frame_update(app_api);
+        }
+
+        for child in scene_tree.children.iter() {
+            Self::walk_through_tree_scripts(child, scene_entities, app_api);
         }
     }
 }
