@@ -5,6 +5,7 @@ edition = "2024"
 
 [build-dependencies]
 convert_case = "0.11"
+codegen = "0.3"
 
 [dependencies]
 vulkano = { version = "0.35", features = ["serde"] }
