@@ -3,6 +3,9 @@ name = "vulkan_3d_framework"
 version = "0.0.12"
 edition = "2024"
 
+[build-dependencies]
+convert_case = "0.11"
+
 [dependencies]
 vulkano = { version = "0.35", features = ["serde"] }
 log = "0.4"
