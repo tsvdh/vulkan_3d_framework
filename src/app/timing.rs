@@ -10,6 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
+use crate::app::script_api::TimingApi;
 
 type GpuFence = FenceSignalFuture<Box<dyn GpuFuture + Send>>;
 
@@ -87,6 +88,12 @@ impl TimingItems {
         timing_items.start_async_processes();
 
         timing_items
+    }
+    
+    pub fn get_api(&mut self) -> TimingApi {
+        TimingApi {
+            frame_duration: self.get_frame_duration()
+        }
     }
 
     pub fn get_frame_duration(&self) -> f32 {

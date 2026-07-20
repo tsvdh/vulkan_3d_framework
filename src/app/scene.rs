@@ -1,6 +1,6 @@
 use crate::app::shader_modules::fs_mod_render::{DirectionalLight, PhongMaterial, PointLight};
 use crate::app::ui::{ControlUi, TreeHeadingUi};
-use crate::app::util::{CommonItems, MeshHolder, ObjectHolder};
+use crate::app::util::{CommonItems, MeshHolder, ObjectHolder, WithId};
 use downcast_rs::{impl_downcast, Downcast};
 use glam::Vec3;
 use serde::Deserialize;
@@ -22,6 +22,7 @@ pub struct SceneLayout {
     pub light_id: u32,
     pub scene_entities: ObjectHolder<Box<dyn SceneEntity>>,
     pub scene_tree_root: SceneTree,
+    pub scene_scripts: ObjectHolder<Box<dyn Script>>,
 }
 
 pub struct SceneTree {
@@ -58,7 +59,7 @@ pub struct SceneObject {
     pub mesh_id: Option<u32>,
     pub material: Option<PhongMaterial>,
 
-    pub script: Option<Box<dyn Script>>,
+    pub script_id: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -94,48 +95,22 @@ pub struct ScriptConfig {
 
 // ----- Functionality -----
 
-pub trait SceneEntity : ControlUi + TreeHeadingUi + Downcast {
-    fn get_id(&self) -> u32;
-    fn set_id(&mut self, id: u32);
+pub trait SceneEntity : WithId + ControlUi + TreeHeadingUi + Downcast {
     fn get_name(&self) -> &str;
 }
 impl_downcast!(SceneEntity);
 
 impl SceneEntity for SceneObject {
-    fn get_id(&self) -> u32 {
-        self.id
-    }
-    fn set_id(&mut self, id: u32) {
-        self.id = id
-    }
     fn get_name(&self) -> &str {
         self.name.as_str()
     }
 }
 impl SceneEntity for Camera {
-    fn get_id(&self) -> u32 {
-        self.id
-    }
-    fn set_id(&mut self, id: u32) {
-        self.id = id
-    }
     fn get_name(&self) -> &str {
         "Camera"
     }
 }
 impl SceneEntity for Light {
-    fn get_id(&self) -> u32 {
-        match self {
-            Light::Point { id, .. } => { *id }
-            Light::Directional { id, .. } => { *id }
-        }
-    }
-    fn set_id(&mut self, new_id: u32) {
-        match self {
-            Light::Point { id, .. } => { *id = new_id }
-            Light::Directional { id, .. } => { *id = new_id }
-        }
-    }
     fn get_name(&self) -> &str {
         match self {
             Light::Point { .. } => { "Point light" }
@@ -144,12 +119,6 @@ impl SceneEntity for Light {
     }
 }
 impl SceneEntity for Box<dyn SceneEntity> {
-    fn get_id(&self) -> u32 {
-        self.as_ref().get_id()
-    }
-    fn set_id(&mut self, id: u32) {
-        self.as_mut().set_id(id);
-    }
     fn get_name(&self) -> &str {
         self.as_ref().get_name()
     }
@@ -198,30 +167,33 @@ impl SceneLayoutConfig {
             scale: Vec3::ONE,
             mesh_id: None,
             material: None,
-            script: None,
+            script_id: None,
         };
 
         let mut scene_entities: ObjectHolder<Box<dyn SceneEntity>> = ObjectHolder::new();
 
-        let root_id = scene_entities.add_with_id(Box::new(scene_root));
+        let root_id = scene_entities.set_id_and_add(Box::new(scene_root));
         let mut scene_tree_root = SceneTree::new(root_id);
 
-        let camera_id = scene_entities.add_with_id(Box::new(self.camera));
-        let light_id = scene_entities.add_with_id(Box::new(self.light));
+        let camera_id = scene_entities.set_id_and_add(Box::new(self.camera));
+        let light_id = scene_entities.set_id_and_add(Box::new(self.light));
         scene_tree_root.children.push(SceneTree::new(camera_id));
         scene_tree_root.children.push(SceneTree::new(light_id));
+
+        let mut scene_scripts = ObjectHolder::new();
 
         let mut mesh_holder = MeshHolder::new();
 
         let working_dir = env::current_dir().unwrap();
         Self::walk_through_tree(&self.scene_objects, common_items, &mut scene_entities,
-                                &mut scene_tree_root, &mut mesh_holder, &working_dir);
+                                &mut scene_tree_root, &mut scene_scripts, &mut mesh_holder, &working_dir);
 
         let mut scene_layout = SceneLayout {
             camera_id,
             light_id,
             scene_entities,
-            scene_tree_root: scene_tree_root
+            scene_tree_root,
+            scene_scripts,
         };
 
         scene_layout.after_parsing();
@@ -232,6 +204,7 @@ impl SceneLayoutConfig {
     fn walk_through_tree(scene_object_configs: &Vec<SceneObjectConfig>,
                          common_items: &CommonItems,
                          scene_entities: &mut ObjectHolder<Box<dyn SceneEntity>>, scene_tree: &mut SceneTree,
+                         scene_scripts: &mut ObjectHolder<Box<dyn Script>>,
                          mesh_holder: &mut MeshHolder,
                          working_dir: &PathBuf)
     {
@@ -249,7 +222,7 @@ impl SceneLayoutConfig {
                 scale: scene_object_config.scale,
                 mesh_id: None,
                 material: None,
-                script: None,
+                script_id: None,
             };
 
             if let Some(mesh_name) = scene_object_config.mesh_path.as_ref() {
@@ -270,14 +243,16 @@ impl SceneLayoutConfig {
             }
 
             if let Some(script_config) = scene_object_config.script.as_ref() {
-                scene_object.script = Some(get_script(script_config.name.as_str(), script_config.args.clone()));
+                let script = get_script(script_config.name.as_str(), script_config.args.clone());
+                let script_id = scene_scripts.add(script);
+                scene_object.script_id = Some(script_id);
             }
 
-            let entity_id = scene_entities.add_with_id(Box::new(scene_object));
+            let entity_id = scene_entities.set_id_and_add(Box::new(scene_object));
             let mut child_tree = SceneTree::new(entity_id);
 
             Self::walk_through_tree(&scene_object_config.children, common_items, scene_entities,
-                                    &mut child_tree, mesh_holder, working_dir);
+                                    &mut child_tree, scene_scripts, mesh_holder, working_dir);
 
             scene_tree.children.push(child_tree);
         }

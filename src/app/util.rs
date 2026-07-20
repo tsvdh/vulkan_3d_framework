@@ -1,4 +1,4 @@
-use crate::app::scene::SceneEntity;
+use crate::app::scene::{Camera, Light, SceneEntity, SceneObject};
 use log::{debug, error, info, warn};
 use obj::{load_obj, Obj, Vertex};
 use std::collections::{btree_map, BTreeMap, HashMap};
@@ -208,6 +208,52 @@ pub fn degrees_from_radians(radians: f32) -> f32 {
     radians / PI * 180.0
 }
 
+pub trait WithId {
+    fn get_id(&self) -> u32;
+    fn set_id(&mut self, id: u32);
+}
+
+impl WithId for SceneObject {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+    fn set_id(&mut self, id: u32) {
+        self.id = id
+    }
+}
+
+impl WithId for Camera {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+    fn set_id(&mut self, id: u32) {
+        self.id = id
+    }
+
+}
+impl WithId for Light {
+    fn get_id(&self) -> u32 {
+        match self {
+            Light::Point { id, .. } => { *id }
+            Light::Directional { id, .. } => { *id }
+        }
+    }
+    fn set_id(&mut self, new_id: u32) {
+        match self {
+            Light::Point { id, .. } => { *id = new_id }
+            Light::Directional { id, .. } => { *id = new_id }
+        }
+    }
+}
+impl WithId for Box<dyn SceneEntity> {
+    fn get_id(&self) -> u32 {
+        self.as_ref().get_id()
+    }
+    fn set_id(&mut self, id: u32) {
+        self.as_mut().set_id(id);
+    }
+}
+
 pub struct ObjectHolder<T> {
     cur_new_id: u32,
     objects: BTreeMap<u32, T>
@@ -222,8 +268,8 @@ impl<T> ObjectHolder<T> {
         }
     }
 
-    pub fn add_with_id(&mut self, mut object: T) -> u32
-    where T: SceneEntity
+    pub fn set_id_and_add(&mut self, mut object: T) -> u32
+    where T: WithId
     {
         object.set_id(self.cur_new_id);
         self.add(object)

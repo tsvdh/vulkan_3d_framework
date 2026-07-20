@@ -9,10 +9,11 @@ use std::f32::consts::FRAC_PI_2;
 use winit::event::KeyEvent;
 use winit::keyboard::KeyCode::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp, KeyT, PageDown, PageUp};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use crate::app::script_api::AppApi;
+use crate::app::script_api::{AppApi, LogicApi};
 use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
 use crate::app::UniformHolder;
 use crate::app::util::{radians_from_degrees, ObjectHolder};
+use crate::scripts::Script;
 
 pub struct LogicItems {
     // public
@@ -59,6 +60,13 @@ impl LogicItems {
                 }
             }
             PhysicalKey::Unidentified(_) => {}
+        }
+    }
+    
+    pub fn get_api(&mut self) -> LogicApi {
+        LogicApi {
+            keys_pressed: self.keys_pressed.clone(),
+            keys_down: self.keys_down.clone(),
         }
     }
 
@@ -123,7 +131,7 @@ impl LogicItems {
         };
 
         Self::walk_through_tree_scripts(&scene_layout.scene_tree_root, &mut scene_layout.scene_entities,
-                                        app_api);
+                                        &mut scene_layout.scene_scripts, app_api);
 
         Self::walk_through_tree_uniforms(&scene_layout.scene_tree_root, &scene_layout.scene_entities,
                                          &view_proj_camera_matrix, &view_proj_light_matrix, &Mat4::IDENTITY,
@@ -176,6 +184,7 @@ impl LogicItems {
     }
 
     fn walk_through_tree_scripts(scene_tree: &SceneTree, scene_entities: &mut ObjectHolder<Box<dyn SceneEntity>>,
+                                 scene_scripts: &mut ObjectHolder<Box<dyn Script>>,
                                  app_api: &mut AppApi)
     {
         let cur_entity = scene_entities.get_mut(scene_tree.entity_id);
@@ -188,12 +197,12 @@ impl LogicItems {
 
         let cur_object = cur_entity.downcast_mut::<SceneObject>().unwrap();
 
-        if let Some(script) = cur_object.script.as_mut() {
-            script.frame_update(app_api);
+        if let Some(script_id) = cur_object.script_id {
+            scene_scripts.get_mut(script_id).frame_update(cur_object, app_api);
         }
 
         for child in scene_tree.children.iter() {
-            Self::walk_through_tree_scripts(child, scene_entities, app_api);
+            Self::walk_through_tree_scripts(child, scene_entities, scene_scripts, app_api);
         }
     }
 }
