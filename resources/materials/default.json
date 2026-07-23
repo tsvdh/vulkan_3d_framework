@@ -2,7 +2,7 @@
   "name": "default",
   "ambient": {
     "color": [255, 255, 255],
-    "coefficient": 0.05
+    "coefficient": 0.13
   },
   "diffuse": {
     "color": [255, 255, 255],
