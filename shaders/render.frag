@@ -47,6 +47,10 @@ layout(set = 0, binding = 1) uniform RenderFragmentData {
 
 layout(set = 0, binding = 2) uniform sampler2D shadow_map;
 
+// --- Constants ---
+
+const float SHADOW_MIN = 0.2;
+
 // --- Functionality ---
 
 vec3 get_light_dir(Lights lights, vec3 position) {
@@ -62,11 +66,25 @@ float get_shadow(vec4 f_position_light, vec3 light_dir) {
      vec3 proj_position = f_position_light.xyz / f_position_light.w;
      float point_depth = proj_position.z;
      vec2 proj_coords = proj_position.xy * 0.5 + 0.5;
-     float shadow_map_depth = texture(shadow_map, proj_coords).x;
 
-     float bias = max(0.05 * (1 - dot(light_dir, f_normal)), 0.005);
+     vec2 texel_size = vec2(1.0) /  textureSize(shadow_map, 0);
 
-     return point_depth <= (shadow_map_depth + 0.005) ? 1.0 : 0.2;
+     float shadow = 0;
+     int grid_min = -1;
+     int grid_max = 1;
+
+     for (int x = grid_min; x <= grid_max; x++) {
+          for (int y = grid_min; y <= grid_max; y++) {
+
+               float shadow_map_depth = texture(shadow_map, proj_coords + vec2(x, y) * texel_size).x;
+               float bias = max(0.05 * (1 - dot(light_dir, f_normal)), 0.005);
+
+               shadow += point_depth <= (shadow_map_depth + bias) ? 1.0 : SHADOW_MIN;
+          }
+     }
+
+     shadow /= pow((grid_max - grid_min) + 1, 2);
+     return shadow;
 }
 
 // ------
@@ -100,7 +118,8 @@ void main() {
      PhongComponent specular = uniforms.material.specular;
 
      float diffuse_shadow = get_shadow(f_position_light, light_dir);
-     float specular_shadow = diffuse_shadow < 1.0 ? 0.0 : 1.0;
+     // convert from [SHADOW_MIN <-> 1.0] to [0.0 <-> 1.0]
+     float specular_shadow = (diffuse_shadow - SHADOW_MIN) / (1 - SHADOW_MIN);
 
      f_color = vec4(
           ambient.color / 255 * ambient.coefficient
