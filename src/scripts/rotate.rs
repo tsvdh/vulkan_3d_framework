@@ -1,7 +1,7 @@
-use serde::Deserialize;
 use crate::app::scene::SceneObject;
-use crate::app::script_api::AppApi;
+use crate::app::AppApi;
 use crate::scripts::{convert_args, Script};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 enum Axis {
@@ -28,14 +28,14 @@ impl Rotate {
 
 impl Script for Rotate {
 
-    fn frame_update(&mut self, cur_object: &mut SceneObject, api: &mut AppApi) {
+    fn frame_update(&mut self, cur_object: &mut SceneObject, app_api: &mut AppApi) {
         let mut cur_rotation = match self.args.axis {
             Axis::X => { cur_object.rotation.x  }
             Axis::Y => { cur_object.rotation.y }
             Axis::Z => { cur_object.rotation.z }
         };
 
-        cur_rotation += self.args.speed * api.timing_api.frame_duration;
+        cur_rotation += self.args.speed * app_api.timing_api.frame_duration;
         cur_rotation = cur_rotation % 360.0;
 
         match self.args.axis {

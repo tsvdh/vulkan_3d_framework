@@ -9,9 +9,8 @@ use std::f32::consts::FRAC_PI_2;
 use winit::event::KeyEvent;
 use winit::keyboard::KeyCode::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp, KeyT, PageDown, PageUp};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use crate::app::script_api::{AppApi, LogicApi};
 use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
-use crate::app::UniformHolder;
+use crate::app::{AppApi, UniformHolder};
 use crate::app::util::{radians_from_degrees, ObjectHolder};
 use crate::scripts::Script;
 
@@ -26,6 +25,11 @@ pub struct LogicItems {
     // private
     keys_pressed: BTreeSet<KeyCode>,
     keys_down: BTreeSet<KeyCode>,
+}
+
+pub struct LogicApi<'a> {
+    pub keys_pressed: &'a BTreeSet<KeyCode>,
+    pub keys_down: &'a BTreeSet<KeyCode>,
 }
 
 impl LogicItems {
@@ -60,13 +64,6 @@ impl LogicItems {
                 }
             }
             PhysicalKey::Unidentified(_) => {}
-        }
-    }
-    
-    pub fn get_api(&mut self) -> LogicApi {
-        LogicApi {
-            keys_pressed: self.keys_pressed.clone(),
-            keys_down: self.keys_down.clone(),
         }
     }
 
@@ -118,7 +115,6 @@ impl LogicItems {
                       render_items: &RenderItems,
                       scene_layout: &mut SceneLayout,
                       uniform_holder: &mut UniformHolder,
-                      app_api: &mut AppApi,
     ) {
         let frame_duration = timing_items.get_frame_duration();
         self.handle_input(frame_duration, timing_items, scene_layout);
@@ -130,8 +126,10 @@ impl LogicItems {
             directional_light: scene_layout.get_light().get_directional_light(),
         };
 
+        let mut app_api = AppApi::new(self, scene_layout, timing_items);
+
         Self::walk_through_tree_scripts(&scene_layout.scene_tree_root, &mut scene_layout.scene_entities,
-                                        &mut scene_layout.scene_scripts, app_api);
+                                        &mut scene_layout.scene_scripts, &mut app_api);
 
         Self::walk_through_tree_uniforms(&scene_layout.scene_tree_root, &scene_layout.scene_entities,
                                          &view_proj_camera_matrix, &view_proj_light_matrix, &Mat4::IDENTITY,
@@ -247,4 +245,14 @@ fn make_model_matrix(scene_object: &SceneObject) -> Mat4 {
             * Quat::from_rotation_z(radians_from_degrees(scene_object.rotation.z));
 
     Mat4::from_scale_rotation_translation(scene_object.scale, rotation_quaternion, scene_object.translation)
+}
+
+impl LogicApi<'_> {
+
+    pub fn new(logic_items: &'_ mut LogicItems) -> LogicApi<'_> {
+        LogicApi {
+            keys_pressed: &logic_items.keys_pressed,
+            keys_down: &logic_items.keys_down,
+        }
+    }
 }

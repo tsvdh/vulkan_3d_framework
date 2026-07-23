@@ -93,6 +93,10 @@ pub struct ScriptConfig {
     args: serde_json::Value,
 }
 
+pub struct SceneApi {
+    
+}
+
 // ----- Functionality -----
 
 pub trait SceneEntity : WithId + ControlUi + TreeHeadingUi + Downcast {
@@ -288,5 +292,12 @@ impl SceneLayout {
                 *direction = direction.normalize();
             }
         }
+    }
+}
+
+impl SceneApi {
+    
+    pub fn new(scene_layout: &mut SceneLayout) -> SceneApi {
+        SceneApi {}
     }
 }

@@ -1,8 +1,8 @@
+use crate::app::scene::SceneObject;
+use crate::app::AppApi;
+use crate::scripts::{convert_args, Script};
 use log::info;
 use serde::Deserialize;
-use crate::app::scene::SceneObject;
-use crate::app::script_api::AppApi;
-use crate::scripts::{convert_args, Script};
 
 #[derive(Deserialize)]
 struct Args {
@@ -25,7 +25,7 @@ impl Test {
 
 impl Script for Test {
 
-    fn frame_update(&mut self, cur_object: &mut SceneObject, api: &mut AppApi) {
+    fn frame_update(&mut self, cur_object: &mut SceneObject, app_api: &mut AppApi) {
         if !self.said_hello {
             self.said_hello = true;
             info!("Hello from script!");

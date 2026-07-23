@@ -5,16 +5,14 @@ pub mod shader_modules;
 pub mod timing;
 pub mod ui;
 pub mod util;
-pub mod script_api;
 
-use crate::app::logic::LogicItems;
+use crate::app::logic::{LogicApi, LogicItems};
 use crate::app::rendering::RenderItems;
-use crate::app::scene::{SceneLayout, SceneLayoutConfig};
-use crate::app::script_api::{AppApi, SceneApi};
+use crate::app::scene::{SceneApi, SceneLayout, SceneLayoutConfig};
 use crate::app::shader_modules::fs_mod_render::RenderFragmentData;
 use crate::app::shader_modules::vs_mod_render::RenderVertexData;
 use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
-use crate::app::timing::TimingItems;
+use crate::app::timing::{TimingApi, TimingItems};
 use crate::app::ui::GuiItems;
 use crate::app::util::{get_common_vulkan_items, CommonItems, InitOption, MeshHolder};
 use serde::Deserialize;
@@ -49,6 +47,12 @@ pub struct App {
     logic_items: LogicItems,
     gui_items: InitOption<GuiItems>,
     timing_items: TimingItems,
+}
+
+pub struct AppApi<'a> {
+    pub logic_api: LogicApi<'a>,
+    pub scene_api: SceneApi,
+    pub timing_api: TimingApi,
 }
 
 impl App {
@@ -101,12 +105,18 @@ impl App {
             uniform_holder: UniformHolder::new(),
         }
     }
-    
-    fn get_api(&mut self) -> AppApi {
+}
+
+impl<'a> AppApi<'a> {
+
+    pub fn new(logic_items: &'a mut LogicItems,
+               scene_layout: &mut SceneLayout,
+               timing_items: &mut TimingItems
+    ) -> AppApi<'a> {
         AppApi {
-            logic_api: self.logic_items.get_api(),
-            scene_api: SceneApi {},
-            timing_api: self.timing_items.get_api(),
+            logic_api: LogicApi::new(logic_items),
+            scene_api: SceneApi::new(scene_layout),
+            timing_api: TimingApi::new(timing_items),
         }
     }
 }
@@ -133,9 +143,8 @@ impl ApplicationHandler for App {
 
         // first frame render prep
         self.gui_items.build_ui(&mut self.scene_layout);
-        let mut app_api = self.get_api();
         self.logic_items.base_logic(&mut self.timing_items, &self.render_items, 
-                                    &mut self.scene_layout, &mut self.uniform_holder, &mut app_api);
+                                    &mut self.scene_layout, &mut self.uniform_holder);
 
         window.set_visible(true);
     }
@@ -197,13 +206,11 @@ impl ApplicationHandler for App {
                 self.timing_items.frame_component_durations.ui_duration = Some(ui_start.elapsed());
 
                 let logic_start = Instant::now();
-                let mut app_api = self.get_api();
                 self.logic_items.base_logic(
                     &mut self.timing_items,
                     &self.render_items,
                     &mut self.scene_layout,
                     &mut self.uniform_holder,
-                    &mut app_api
                 );
                 self.timing_items.frame_component_durations.base_logic_duration = Some(logic_start.elapsed());
             }
