@@ -8,15 +8,11 @@ pub mod util;
 
 use crate::app::logic::{LogicApi, LogicItems};
 use crate::app::rendering::RenderItems;
-use crate::app::scene::{SceneApi, SceneLayout, SceneLayoutConfig};
-use crate::app::shader_modules::fs_mod_render::RenderFragmentData;
-use crate::app::shader_modules::vs_mod_render::RenderVertexData;
-use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
+use crate::app::scene::{SceneApi, SceneItems, SceneLayoutConfig};
 use crate::app::timing::{TimingApi, TimingItems};
 use crate::app::ui::GuiItems;
-use crate::app::util::{get_common_vulkan_items, CommonItems, InitOption, MeshHolder};
+use crate::app::util::{get_common_vulkan_items, CommonItems, InitOption};
 use serde::Deserialize;
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::sync::Arc;
 use std::time::Instant;
@@ -34,13 +30,9 @@ pub struct Config {
     pub show_frame_times: bool,
 }
 
-type UniformHolder = BTreeMap<u32, (ShadowVertexData, RenderVertexData, RenderFragmentData)>;
-
 pub struct App {
     config: Config,
-    scene_layout: SceneLayout,
-    mesh_holder: MeshHolder,
-    uniform_holder: UniformHolder,
+    scene_items: SceneItems,
 
     common_items: CommonItems,
     render_items: InitOption<RenderItems>,
@@ -49,9 +41,9 @@ pub struct App {
     timing_items: TimingItems,
 }
 
-pub struct AppApi<'a> {
-    pub logic_api: LogicApi<'a>,
-    pub scene_api: SceneApi,
+pub struct AppApi<'api> {
+    pub logic_api: LogicApi<'api>,
+    pub scene_api: SceneApi<'api>,
     pub timing_api: TimingApi,
 }
 
@@ -89,7 +81,7 @@ impl App {
         let scene_layout_config: SceneLayoutConfig = serde_json::from_reader(File::open("configs/scene_layout.json").unwrap())
             .expect("Incorrect scene layout file");
 
-        let (scene_layout, mesh_holder) = scene_layout_config.parse(&common_items);
+        let scene_items = SceneItems::new(scene_layout_config, &common_items);
 
         let timing_items = TimingItems::new(&config);
 
@@ -100,22 +92,20 @@ impl App {
             gui_items: InitOption::none(),
             timing_items,
             config,
-            scene_layout,
-            mesh_holder,
-            uniform_holder: UniformHolder::new(),
+            scene_items,
         }
     }
 }
 
-impl<'a> AppApi<'a> {
+impl<'api> AppApi<'api> {
 
-    pub fn new(logic_items: &'a mut LogicItems,
-               scene_layout: &mut SceneLayout,
+    pub fn new(logic_items: &'api mut LogicItems,
+               scene_items: &'api mut SceneItems,
                timing_items: &mut TimingItems
-    ) -> AppApi<'a> {
+    ) -> AppApi<'api> {
         AppApi {
             logic_api: LogicApi::new(logic_items),
-            scene_api: SceneApi::new(scene_layout),
+            scene_api: SceneApi::new(scene_items),
             timing_api: TimingApi::new(timing_items),
         }
     }
@@ -132,7 +122,7 @@ impl ApplicationHandler for App {
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         self.render_items = InitOption::some(
-            RenderItems::new(&self.common_items, window.clone(), &self.scene_layout)
+            RenderItems::new(&self.common_items, window.clone(), &self.scene_items)
         );
         if self.render_items.swapchain.image_count() != 2 {
             panic!("Swapchain should contain exactly two images");
@@ -142,9 +132,8 @@ impl ApplicationHandler for App {
         );
 
         // first frame render prep
-        self.gui_items.build_ui(&mut self.scene_layout);
-        self.logic_items.base_logic(&mut self.timing_items, &self.render_items, 
-                                    &mut self.scene_layout, &mut self.uniform_holder);
+        self.gui_items.build_ui(&mut self.scene_items);
+        self.logic_items.base_logic(&mut self.timing_items, &self.render_items, &mut self.scene_items);
 
         window.set_visible(true);
     }
@@ -194,24 +183,17 @@ impl ApplicationHandler for App {
                     &mut self.timing_items,
                     &mut self.gui_items,
                     acquire_future,
-                    &self.scene_layout,
-                    &self.mesh_holder,
-                    &self.uniform_holder
+                    &self.scene_items,
                 );
                 self.timing_items.frame_component_durations.render_cpu_duration = Some(render_cpu_start.elapsed());
                 *self.timing_items.get_render_gpu_start_mutex() = Instant::now();
 
                 let ui_start = Instant::now();
-                self.gui_items.build_ui(&mut self.scene_layout);
+                self.gui_items.build_ui(&mut self.scene_items);
                 self.timing_items.frame_component_durations.ui_duration = Some(ui_start.elapsed());
 
                 let logic_start = Instant::now();
-                self.logic_items.base_logic(
-                    &mut self.timing_items,
-                    &self.render_items,
-                    &mut self.scene_layout,
-                    &mut self.uniform_holder,
-                );
+                self.logic_items.base_logic(&mut self.timing_items, &self.render_items, &mut self.scene_items);
                 self.timing_items.frame_component_durations.base_logic_duration = Some(logic_start.elapsed());
             }
             _ => {}

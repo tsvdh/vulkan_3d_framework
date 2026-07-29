@@ -1,94 +1,116 @@
 {
-  "camera": {
-    "position": [0, 0, -3],
-    "look_at": [0, 0, 0],
-    "horizon": [1, 0, 0]
-  },
-  "light": {
-    "type": "Directional",
-    "direction": [0, -1, 0]
-  },
   "scene_objects": [
     {
+      "name": "Camera",
+      "transform": {
+        "translation": [0, 0, -3],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "camera": {
+        "active": true,
+        "fov": 65
+      }
+    },
+    {
+      "name": "Light",
+      "transform": {
+        "translation": [0, 0, 0],
+        "rotation": [90, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "light": {
+        "type": "Directional",
+        "active": true
+      }
+    },
+    {
       "name": "plane",
-      "translation": [0, -1, 0],
-      "rotation": [0, 0, 0],
-      "scale": [10, 1, 10],
+      "transform": {
+        "translation": [0, -1, 0],
+        "rotation": [0, 0, 0],
+        "scale": [10, 1, 10]
+      },
       "mesh_path": "plane.obj",
-      "material_path": "floor.json",
-      "children": []
+      "material_path": "floor.json"
     },
     {
       "name": "grey_bunnies",
-      "translation": [2, 0, 0],
-      "rotation": [0, 0, 0],
-      "scale": [0.5, 0.5, 0.5],
+      "transform": {
+        "translation": [2, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [0.5, 0.5, 0.5]
+      },
       "children": [
         {
           "name": "bunny1.1",
-          "translation": [0, 1, 0],
-          "rotation": [0, 0, 0],
-          "scale": [1, 1, 1],
+          "transform": {
+            "translation": [0, 1, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+          },
           "mesh_path": "bunny_face_normals.obj",
           "material_path": "default.json",
-          "script": {
+          "scene_object_script": {
             "name": "rotate",
             "args": {
               "speed": 45,
               "axis": "Y"
             }
-          },
-          "children": []
+          }
         },
         {
           "name": "bunny1.2",
-          "translation": [0, -1, 0],
-          "rotation": [0, 0, 0],
-          "scale": [1, 1, 1],
+          "transform": {
+            "translation": [0, -1, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+          },
           "mesh_path": "bunny_face_normals.obj",
           "material_path": "default.json",
-          "script": {
+          "scene_object_script": {
             "name": "rotate",
             "args": {
               "speed": -45,
               "axis": "Y"
             }
-          },
-          "children": []
+          }
         }
       ]
     },
     {
       "name": "bunny2",
-      "translation": [0, 0, 0],
-      "rotation": [0, 180, 0],
-      "scale": [1, 1, 1],
+      "transform": {
+        "translation": [0, 0, 0],
+        "rotation": [0, 180, 0],
+        "scale": [1, 1, 1]
+      },
       "mesh_path": "bunny_face_normals.obj",
       "material_path": "orange.json",
-      "script": {
+      "scene_object_script": {
         "name": "rotate",
         "args": {
           "speed": 45,
           "axis": "Z"
         }
-      },
-      "children": []
+      }
     },
     {
       "name": "test",
-      "translation": [-2, 0, 0],
-      "rotation": [0, 0, 0],
-      "scale": [1, 1, 1],
+      "transform": {
+        "translation": [-2, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
       "mesh_path": "coors_system_test.obj",
       "material_path": "orange.json",
-      "script": {
+      "scene_object_script": {
         "name": "rotate",
         "args": {
           "speed": 45,
           "axis": "X"
         }
-      },
-      "children": []
+      }
     }
   ]
 }

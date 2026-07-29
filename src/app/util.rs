@@ -1,4 +1,4 @@
-use crate::app::scene::{Camera, Light, SceneEntity, SceneObject};
+use crate::app::scene::{SceneObject};
 use log::{debug, error, info, warn};
 use obj::{load_obj, Obj, Vertex};
 use std::collections::{btree_map, BTreeMap, HashMap};
@@ -222,38 +222,6 @@ impl WithId for SceneObject {
     }
 }
 
-impl WithId for Camera {
-    fn get_id(&self) -> u32 {
-        self.id
-    }
-    fn set_id(&mut self, id: u32) {
-        self.id = id
-    }
-
-}
-impl WithId for Light {
-    fn get_id(&self) -> u32 {
-        match self {
-            Light::Point { id, .. } => { *id }
-            Light::Directional { id, .. } => { *id }
-        }
-    }
-    fn set_id(&mut self, new_id: u32) {
-        match self {
-            Light::Point { id, .. } => { *id = new_id }
-            Light::Directional { id, .. } => { *id = new_id }
-        }
-    }
-}
-impl WithId for Box<dyn SceneEntity> {
-    fn get_id(&self) -> u32 {
-        self.as_ref().get_id()
-    }
-    fn set_id(&mut self, id: u32) {
-        self.as_mut().set_id(id);
-    }
-}
-
 pub struct ObjectHolder<T> {
     cur_new_id: u32,
     objects: BTreeMap<u32, T>
@@ -283,16 +251,32 @@ impl<T> ObjectHolder<T> {
         cur_id
     }
 
-    pub fn remove(&mut self, id: u32) {
-        self.objects.remove(&id).expect("Id not present");
+    pub fn insert_at_id(&mut self, id: u32, object: T) {
+        if self.objects.contains_key(&id) {
+            panic!("Id of object already taken")
+        }
+        self.objects.insert(id, object);
     }
 
-    pub fn get_mut(&mut self, id: u32) -> &mut T {
-        self.objects.get_mut(&id).expect("Id not present")
+    pub fn insert(&mut self, object: T)
+    where T: WithId
+    {
+        if self.objects.contains_key(&object.get_id()) {
+            panic!("Id of object already taken")
+        }
+        self.objects.insert(object.get_id(), object);
+    }
+
+    pub fn remove(&mut self, id: u32) -> T {
+        self.objects.remove(&id).expect("Id not present")
     }
 
     pub fn get(&self, id: u32) -> &T {
         self.objects.get(&id).expect("Id not present")
+    }
+
+    pub fn get_mut(&mut self, id: u32) -> &mut T {
+        self.objects.get_mut(&id).expect("Id not present")
     }
 
     pub fn get_iter(&'_ self) -> btree_map::Iter<'_, u32, T> {
@@ -301,6 +285,12 @@ impl<T> ObjectHolder<T> {
 
     pub fn get_iter_mut(&'_ mut self) -> btree_map::IterMut<'_, u32, T> {
         self.objects.iter_mut()
+    }
+
+    pub fn get_ids(&self) -> Vec<u32> {
+        self.objects.iter()
+            .map(|x| { *x.0 })
+            .collect()
     }
 }
 
@@ -387,4 +377,4 @@ pub fn load_mesh(path: &PathBuf, common_items: &CommonItems) -> (Subbuffer<[Vert
     ).unwrap();
 
     (vertex_buffer, index_buffer)
-} 
+}

@@ -1,8 +1,10 @@
-use crate::app::scene::SceneObject;
+use egui::Ui;
 use crate::app::AppApi;
-use crate::scripts::{convert_args, Script};
+use crate::scripts::{convert_args, SceneObjectScript};
 use log::info;
 use serde::Deserialize;
+use crate::app::scene::{SceneApi, SceneObject};
+use crate::app::ui::ControlUi;
 
 #[derive(Deserialize)]
 struct Args {
@@ -23,7 +25,7 @@ impl Test {
     }
 }
 
-impl Script for Test {
+impl SceneObjectScript for Test {
 
     fn frame_update(&mut self, cur_object: &mut SceneObject, app_api: &mut AppApi) {
         if !self.said_hello {
@@ -31,5 +33,11 @@ impl Script for Test {
             info!("Hello from script!");
             info!("You said: {}", self.args.message);
         }
+    }
+}
+
+impl ControlUi for Test {
+    fn control_ui(&mut self, ui: &mut Ui, scene_api: &mut SceneApi) {
+        ui.label("-");
     }
 }

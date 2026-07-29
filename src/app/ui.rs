@@ -1,6 +1,8 @@
+use std::ops::DerefMut;
 use crate::app::rendering::RenderItems;
-use crate::app::scene::{Camera, Light, SceneEntity, SceneLayout, SceneObject, SceneTree};
-use crate::app::util::CommonItems;
+use crate::app::scene::{Camera, Light, SceneApi, SceneItems, SceneObject};
+use crate::app::util::{CommonItems, WithId};
+use crate::scripts::{InstanceScript, SceneObjectScript};
 use egui::{collapsing_header, Align, Atoms, Context, DragValue, Frame, Layout, MenuBar, Panel, RichText, TextStyle, Ui, UiBuilder};
 use egui_winit_vulkano::{Gui, GuiConfig};
 use vulkano::image::SampleCount;
@@ -29,7 +31,9 @@ const LEFT_FOLD_ICON_HEX: &str = "23F4";
 const RIGHT_FOLD_ICON_HEX: &str = "23F5";
 const CAMERA_ICON_HEX: &str = "1F3A5";
 const LIGHT_ICON_HEX: &str = "2600";
-const OBJECT_ICON_HEX: &str = "1F4BC";
+const BOX_ICON_HEX: &str = "1F4E6";
+const OBJECT_ICON_HEX: &str = "1F34E";
+const ALT_OBJECT_ICON_HEX: &str = "1F310";
 
 pub struct GuiItems {
     // public
@@ -85,7 +89,7 @@ impl GuiItems {
     }
 
     pub fn build_ui(&mut self,
-                    scene_layout: &mut SceneLayout,
+                    scene_items: &mut SceneItems,
     ) {
         self.gui.begin_frame();
         let context = self.gui.context();
@@ -109,7 +113,7 @@ impl GuiItems {
                 });
                 ui.separator();
 
-                self.walk_through_tree(scene_layout, &scene_layout.scene_tree_root, &context, ui);
+                self.walk_through_tree(scene_items, scene_items.scene_tree_root_id, &context, ui);
             });
 
         Panel::right("controlPanel")
@@ -121,8 +125,14 @@ impl GuiItems {
                 });
                 ui.separator();
 
-                if let Some(selected_object_id) = self.state.selected_object_id {
-                    scene_layout.scene_entities.get_mut(selected_object_id).control_ui(ui);
+                if let Some(selected_object_id) = self.state.selected_object_id
+                {
+                    let mut selected_object = scene_items.scene_objects.remove(selected_object_id);
+
+                    let mut scene_api = SceneApi::new(scene_items);
+                    selected_object.control_ui(ui, &mut scene_api);
+
+                    scene_items.scene_objects.insert(selected_object);
                 } else {
                     ui.label("Nothing selected");
                 }
@@ -161,11 +171,11 @@ impl GuiItems {
     }
 
     fn walk_through_tree(&mut self,
-                         scene_layout: &SceneLayout, scene_tree: &SceneTree,
+                         scene_items: &SceneItems, cur_object_id: u32,
                          context: &Context, ui: &mut Ui)
     {
-        let cur_object = scene_layout.scene_entities.get(scene_tree.entity_id);
-        let header_name = format!("{}_header", cur_object.get_name());
+        let cur_object = scene_items.scene_objects.get(cur_object_id);
+        let header_name = format!("{}_header", cur_object.name);
 
         let show_item_label = |this: &mut GuiItems, ui: &mut Ui| {
             let object_selected = this.state.selected_object_id.is_some_and(
@@ -182,18 +192,14 @@ impl GuiItems {
             }
         };
 
-        let show_children = |this: &mut GuiItems, ui: &mut Ui| {
-            for child_tree in scene_tree.children.iter() {
-                this.walk_through_tree(scene_layout, child_tree, context, ui);
+        if cur_object.name == "root" {
+            for child_id in cur_object.children.iter() {
+                self.walk_through_tree(scene_items, *child_id, context, ui);
             }
-        };
-
-        if cur_object.get_name() == "root" {
-            show_children(self, ui);
             return
         }
 
-        if scene_tree.children.is_empty() {
+        if cur_object.children.is_empty() {
             show_item_label(self, ui);
         } else {
             collapsing_header::CollapsingState::load_with_default_open(&context, header_name.into(), false)
@@ -201,7 +207,9 @@ impl GuiItems {
                     show_item_label(self, ui);
                 })
                 .body(|ui| {
-                    show_children(self, ui);
+                    for child_id in cur_object.children.iter() {
+                        self.walk_through_tree(scene_items, *child_id, context, ui);
+                    }
                 });
         }
     }
@@ -226,67 +234,65 @@ pub fn vec3_drag_values(ui: &mut Ui, vec3: &mut [f32; 3], speed: f32) {
 }
 
 pub trait ControlUi {
-    fn control_ui(&mut self, ui: &mut Ui);
+    fn control_ui(&mut self, ui: &mut Ui, scene_api: &mut SceneApi);
 }
-
 impl ControlUi for Light {
-    fn control_ui(&mut self, ui: &mut Ui, ) {
-        ui.horizontal(|ui| {
-            ui.label(hex_to_emoji(LIGHT_ICON_HEX, 20.0));
-            ui.label(self.get_name());
-        });
-        ui.separator();
+    fn control_ui(&mut self, ui: &mut Ui, _scene_api: &mut SceneApi) {
+        ui.label("Type");
         match self {
-            Light::Point { id: _, position } => {
-                ui.label("Position");
-                vec3_drag_values(ui, position.as_mut(), 0.1);
-
-            }
-            Light::Directional { id: _, direction } => {
-                ui.label("Direction");
-                let old_direction = direction.clone();
-                vec3_drag_values(ui, direction.as_mut(), 0.01);
-                if direction.length() == 0.0 {
-                    *direction = old_direction;
-                } else {
-                    *direction = direction.normalize();
-                }
-            }
+            Light::Point { .. } => { ui.label("Point"); }
+            Light::Directional { .. } => { ui.label("Directional"); }
         }
     }
 }
 impl ControlUi for Camera {
-    fn control_ui(&mut self, ui: &mut Ui) {
+    fn control_ui(&mut self, ui: &mut Ui, _scene_api: &mut SceneApi) {
         ui.horizontal(|ui| {
-            ui.label(hex_to_emoji(CAMERA_ICON_HEX, 20.0));
-            ui.label(self.get_name());
+            ui.label("FOV: ");
+            ui.add(DragValue::new(&mut self.fov,).speed(0.1).range(10..=100));
         });
-        ui.separator();
-        ui.label("Position");
-        vec3_drag_values(ui, &mut self.position.as_mut(), 0.1);
-        ui.add_space(8.0);
-        ui.label("Horizon");
-        vec3_drag_values(ui, &mut self.horizon.as_mut(), 0.1);
+    }
+}
+impl ControlUi for Box<dyn SceneObjectScript> {
+    fn control_ui(&mut self, ui: &mut Ui, scene_api: &mut SceneApi) {
+        self.deref_mut().control_ui(ui, scene_api);
+    }
+}
+impl ControlUi for Box<dyn InstanceScript> {
+    fn control_ui(&mut self, ui: &mut Ui, scene_api: &mut SceneApi) {
+        self.deref_mut().control_ui(ui, scene_api)
     }
 }
 impl ControlUi for SceneObject {
-    fn control_ui(&mut self, ui: &mut Ui) {
+    fn control_ui(&mut self, ui: &mut Ui, scene_api: &mut SceneApi) {
         ui.horizontal(|ui| {
             ui.label(hex_to_emoji(OBJECT_ICON_HEX, 20.0));
-            ui.label(format!("{} (Object)", self.get_name()))
+            ui.label(format!("{}", self.name))
         });
+
         ui.separator();
         ui.vertical_centered(|ui| {
-            ui.label(RichText::new("Transforms").size(TEXT_SIZE + 2.0))
+            ui.label(RichText::new("Transform").size(TEXT_SIZE + 2.0))
         });
         ui.label("Translation");
-        vec3_drag_values(ui, &mut self.translation.as_mut(), 0.1);
+        vec3_drag_values(ui, &mut self.transform.translation.as_mut(), 0.1);
         ui.add_space(8.0);
         ui.label("Rotation");
-        vec3_drag_values(ui, &mut self.rotation.as_mut(), 1.0);
+        vec3_drag_values(ui, &mut self.transform.rotation.as_mut(), 1.0);
         ui.add_space(8.0);
         ui.label("Scale");
-        vec3_drag_values(ui, &mut self.scale.as_mut(), 0.1);
+        vec3_drag_values(ui, &mut self.transform.scale.as_mut(), 0.1);
+
+        fn attribute_control_ui(name: &str, opt_attribute: Option<&mut impl ControlUi>, ui: &mut Ui, scene_api: &mut SceneApi) {
+            if let Some(attribute) = opt_attribute {
+                ui.separator();
+                ui.vertical_centered(|ui| {
+                    ui.label(RichText::new(name).size(TEXT_SIZE + 2.0))
+                });
+                attribute.control_ui(ui, scene_api);
+            }
+        }
+
         if self.mesh_id.is_some() {
             ui.separator();
             ui.vertical_centered(|ui| {
@@ -294,18 +300,24 @@ impl ControlUi for SceneObject {
             });
             ui.label("-");
         }
-        if let Some(material) = self.material.as_mut() {
-            ui.separator();
-            ui.vertical_centered(|ui| {
-                ui.label(RichText::new("Material").size(TEXT_SIZE + 2.0))
-            });
-            material.control_ui(ui);
+
+        attribute_control_ui("Material", self.material.as_mut(), ui, scene_api);
+        attribute_control_ui("Camera", self.camera.as_mut(), ui, scene_api);
+        attribute_control_ui("Light", self.light.as_mut(), ui, scene_api);
+
+        {
+            let mut script = self.scene_object_script_id.map(|script_id| { scene_api.scene_object_scripts.remove(script_id) });
+            attribute_control_ui("Scene Object Script", script.as_mut(), ui, scene_api);
+            if let Some(script_id) = self.scene_object_script_id {
+                scene_api.scene_object_scripts.insert_at_id(script_id, script.unwrap());
+            }
+        } {
+            let mut script = self.instance_script_id.map(|script_id| { scene_api.instance_scripts.remove(script_id) });
+            attribute_control_ui("Instance Script", script.as_mut(), ui, scene_api);
+            if let Some(script_id) = self.instance_script_id {
+                scene_api.instance_scripts.insert_at_id(script_id, script.unwrap());
+            }
         }
-    }
-}
-impl ControlUi for Box<dyn SceneEntity> {
-    fn control_ui(&mut self, ui: &mut Ui) {
-        self.as_mut().control_ui(ui)
     }
 }
 
@@ -321,23 +333,18 @@ fn hex_to_emoji(hex: &str, size: f32) -> RichText {
 pub trait TreeHeadingUi {
     fn tree_heading_atoms(&'_ self) -> Atoms<'_>;
 }
-impl TreeHeadingUi for Camera {
-    fn tree_heading_atoms(&'_ self) -> Atoms<'_> {
-        Atoms::new((hex_to_emoji(CAMERA_ICON_HEX, TEXT_SIZE), "Camera"))
-    }
-}
-impl TreeHeadingUi for Light {
-    fn tree_heading_atoms(&'_ self) -> Atoms<'_> {
-        Atoms::new((hex_to_emoji(LIGHT_ICON_HEX, TEXT_SIZE), "Light"))
-    }
-}
 impl TreeHeadingUi for SceneObject {
     fn tree_heading_atoms(&'_ self) -> Atoms<'_> {
-        Atoms::new((hex_to_emoji(OBJECT_ICON_HEX, TEXT_SIZE), self.get_name()))
-    }
-}
-impl TreeHeadingUi for Box<dyn SceneEntity> {
-    fn tree_heading_atoms(&'_ self) -> Atoms<'_> {
-        self.as_ref().tree_heading_atoms()
+        let mut icon_hex = BOX_ICON_HEX;
+        if self.mesh_id.is_some() {
+            icon_hex = OBJECT_ICON_HEX;
+        }
+        if self.light.is_some() {
+            icon_hex = LIGHT_ICON_HEX;
+        }
+        if self.camera.is_some() {
+            icon_hex = CAMERA_ICON_HEX;
+        }
+        Atoms::new((hex_to_emoji(icon_hex, TEXT_SIZE), self.name.clone()))
     }
 }

@@ -28,16 +28,17 @@ pub mod fs_mod_render {
     use crate::app::ui::{vec3_drag_values_int_range, ControlUi};
     use egui::{DragValue, Ui};
     use serde::Deserialize;
+    use crate::app::scene::SceneApi;
 
     vulkano_shaders::shader! {
         ty: "fragment",
         path: "shaders/render.frag",
         custom_derives: [Default, Copy, Clone, Deserialize],
-        define: [("edit_id", "5c921c32-4337-416d-889a-d55b84x5d3dx")]
+        define: [("edit_id", "xaac7xa7-9cxd-4dax-b7x6-2xx581c418a8")]
     }
 
     impl ControlUi for PhongComponent {
-        fn control_ui(&mut self, ui: &mut Ui) {
+        fn control_ui(&mut self, ui: &mut Ui, _scene_api: &mut SceneApi) {
             ui.horizontal(|ui| {
                 vec3_drag_values_int_range(ui, &mut self.color, 1.0, 0, 255);
                 ui.add_space(10.0);
@@ -47,15 +48,15 @@ pub mod fs_mod_render {
         }
     }
     impl ControlUi for PhongMaterial {
-        fn control_ui(&mut self, ui: &mut Ui) {
+        fn control_ui(&mut self, ui: &mut Ui, scene_api: &mut SceneApi) {
             ui.label("Ambient");
-            self.ambient.control_ui(ui);
+            self.ambient.control_ui(ui,scene_api);
             ui.add_space(8.0);
             ui.label("Diffuse");
-            self.diffuse.control_ui(ui);
+            self.diffuse.control_ui(ui, scene_api);
             ui.add_space(8.0);
             ui.label("Specular");
-            self.specular.control_ui(ui);
+            self.specular.control_ui(ui, scene_api);
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 ui.label("Shininess: ");

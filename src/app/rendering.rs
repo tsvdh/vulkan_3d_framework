@@ -1,12 +1,11 @@
-use crate::app::scene::{SceneLayout, SceneObject};
+use crate::app::scene::SceneItems;
 use crate::app::shader_modules::fs_mod_render::RenderFragmentData;
 use crate::app::shader_modules::vs_mod_render::RenderVertexData;
 use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
 use crate::app::shader_modules::{fs_mod_render, fs_mod_shadow, vs_mod_render, vs_mod_shadow};
 use crate::app::timing::TimingItems;
 use crate::app::ui::GuiItems;
-use crate::app::util::{CommonItems, MeshHolder};
-use crate::app::UniformHolder;
+use crate::app::util::{CommonItems};
 use log::{info, warn};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -14,6 +13,7 @@ use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderingAttachmentInfo, RenderingInfo};
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::format::Format;
+use vulkano::image::sampler::{Sampler, SamplerCreateInfo};
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::AllocationCreateInfo;
@@ -32,7 +32,6 @@ use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::swapchain::{acquire_next_image, PresentMode, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError};
-use vulkano::image::sampler::{Sampler, SamplerCreateInfo};
 use winit::window::Window;
 
 const SHADOW_MAP_EXTENT: [u32; 2] = [2048, 2048];
@@ -69,7 +68,10 @@ impl RenderItems {
         self.recreate_swapchain = value;
     }
 
-    pub fn new(common_items: &CommonItems, window: Arc<Window>, scene_layout: &SceneLayout) -> Self {
+    pub fn new(common_items: &CommonItems,
+               window: Arc<Window>,
+               scene_items: &SceneItems
+    ) -> Self {
         let surface = Surface::from_window(common_items.instance.clone(), window.clone()).unwrap();
 
         let (swapchain, images) = {
@@ -210,10 +212,9 @@ impl RenderItems {
         let mut uniform_buffer_holder = UniformBufferHolder::new();
         let buf_alloc = common_items.uniform_buffer_allocator.clone();
 
-        for (id, scene_entity) in scene_layout.scene_entities.get_iter()
+        for (id, scene_object) in scene_items.scene_objects.get_iter()
         {
-            if let Some(scene_object) = scene_entity.downcast_ref::<SceneObject>()
-                && scene_object.mesh_id.is_some()
+            if scene_object.mesh_id.is_some()
             {
                 uniform_buffer_holder.insert(*id, (
                     buf_alloc.allocate_sized().unwrap(),
@@ -296,8 +297,7 @@ impl RenderItems {
     }
 
     fn draw_objects(&self,
-                    scene_layout: &SceneLayout,
-                    mesh_holder: &MeshHolder,
+                    scene_items: &SceneItems,
                     command_buffer_builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                     rendering_info: RenderingInfo,
                     viewport: &Viewport,
@@ -309,12 +309,8 @@ impl RenderItems {
             .set_viewport(0, [viewport.clone()].into_iter().collect()).unwrap()
             .bind_pipeline_graphics(pipeline.clone()).unwrap();
 
-        for (id, scene_entity) in scene_layout.scene_entities.get_iter()
+        for (id, scene_object) in scene_items.scene_objects.get_iter()
         {
-            if scene_entity.downcast_ref::<SceneObject>().is_none() {
-                continue
-            }
-            let scene_object = scene_entity.downcast_ref::<SceneObject>().unwrap();
             if scene_object.mesh_id.is_none() {
                 continue
             }
@@ -325,7 +321,8 @@ impl RenderItems {
                                                         pipeline.layout().clone(), 0, descriptor_set).unwrap();
 
             // --- mesh buffers ---
-            let (vertex_buffer, index_buffer) = mesh_holder.get_by_id(scene_object.mesh_id.unwrap());
+            let (vertex_buffer, 
+                index_buffer) = scene_items.mesh_holder.get_by_id(scene_object.mesh_id.unwrap());
 
             command_buffer_builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
             command_buffer_builder.bind_index_buffer(index_buffer.clone()).unwrap();
@@ -339,25 +336,23 @@ impl RenderItems {
     }
 
     pub fn frame_render(&mut self,
-                        vulkan_items: &CommonItems,
+                        common_items: &CommonItems,
                         timing_items: &mut TimingItems,
                         gui_items: &mut GuiItems,
                         acquire_future: SwapchainAcquireFuture,
-                        scene_layout: &SceneLayout,
-                        mesh_holder: &MeshHolder,
-                        uniform_holder: &UniformHolder,
+                        scene_items: &SceneItems,
     ) {
         let image_index = acquire_future.image_index();
         let image_view = self.color_attachment_image_views[image_index as usize].clone();
 
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
-            vulkan_items.command_buffer_allocator.clone(),
-            vulkan_items.queue.queue_family_index(),
+            common_items.command_buffer_allocator.clone(),
+            common_items.queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit
         ).unwrap();
 
         self.draw_objects(
-            scene_layout, mesh_holder, &mut command_buffer_builder,
+            scene_items, &mut command_buffer_builder,
             RenderingInfo {
                 depth_attachment: Some(RenderingAttachmentInfo {
                     load_op: AttachmentLoadOp::Clear,
@@ -369,14 +364,14 @@ impl RenderItems {
             },
             &self.shadow_viewport, self.shadow_pipeline.clone(),
             |id, pipeline| {
-                let (shadow_vertex_uniform, _, _) = uniform_holder.get(id).unwrap();
+                let (shadow_vertex_uniform, _, _) = scene_items.scene_objects.get(*id).uniforms.unwrap();
                 let (shadow_vertex_uniform_buffer, _, _) = self.uniform_buffer_holder.get(id).unwrap();
 
-                *shadow_vertex_uniform_buffer.write().unwrap() = *shadow_vertex_uniform;
+                *shadow_vertex_uniform_buffer.write().unwrap() = shadow_vertex_uniform;
 
                 let descriptor_set_layout = pipeline.layout().set_layouts()[0].clone();
                 let descriptor_set = DescriptorSet::new(
-                    vulkan_items.descriptor_set_allocator.clone(),
+                    common_items.descriptor_set_allocator.clone(),
                     descriptor_set_layout.clone(),
                     [
                         WriteDescriptorSet::buffer(0, shadow_vertex_uniform_buffer.clone()),
@@ -389,7 +384,7 @@ impl RenderItems {
         );
 
         self.draw_objects(
-            scene_layout, mesh_holder, &mut command_buffer_builder,
+            scene_items, &mut command_buffer_builder,
             RenderingInfo {
                 color_attachments: vec![Some(RenderingAttachmentInfo {
                     load_op: AttachmentLoadOp::Clear,
@@ -409,19 +404,17 @@ impl RenderItems {
             |id, pipeline| {
                 let (_,
                     render_vertex_uniform,
-                    render_fragment_uniform) = uniform_holder.get(id).unwrap();
+                    render_fragment_uniform) = scene_items.scene_objects.get(*id).uniforms.unwrap();
                 let (_,
                     render_vertex_uniform_buffer,
                     render_fragment_uniform_buffer) = self.uniform_buffer_holder.get(id).unwrap();
 
-                *render_vertex_uniform_buffer.write().unwrap() = *render_vertex_uniform;
-                *render_fragment_uniform_buffer.write().unwrap() = *render_fragment_uniform;
-
-
+                *render_vertex_uniform_buffer.write().unwrap() = render_vertex_uniform;
+                *render_fragment_uniform_buffer.write().unwrap() = render_fragment_uniform;
 
                 let descriptor_set_layout = pipeline.layout().set_layouts()[0].clone();
                 let descriptor_set = DescriptorSet::new(
-                    vulkan_items.descriptor_set_allocator.clone(),
+                    common_items.descriptor_set_allocator.clone(),
                     descriptor_set_layout.clone(),
                     [
                         WriteDescriptorSet::buffer(0, render_vertex_uniform_buffer.clone()),
@@ -439,11 +432,11 @@ impl RenderItems {
         let command_buffer = command_buffer_builder.build().unwrap();
 
         let scene_future = acquire_future
-            .then_execute(vulkan_items.queue.clone(), command_buffer.clone()).unwrap();
+            .then_execute(common_items.queue.clone(), command_buffer.clone()).unwrap();
 
         let complete_future = gui_items.gui
             .draw_on_image(scene_future, image_view.clone())
-            .then_swapchain_present(vulkan_items.queue.clone(),
+            .then_swapchain_present(common_items.queue.clone(),
                                     SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index))
             .boxed_send()
             .then_signal_fence_and_flush();

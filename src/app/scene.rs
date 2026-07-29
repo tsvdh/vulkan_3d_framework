@@ -1,90 +1,94 @@
-use crate::app::shader_modules::fs_mod_render::{DirectionalLight, PhongMaterial, PointLight};
-use crate::app::ui::{ControlUi, TreeHeadingUi};
-use crate::app::util::{CommonItems, MeshHolder, ObjectHolder, WithId};
-use downcast_rs::{impl_downcast, Downcast};
+use crate::app::shader_modules::fs_mod_render::{PhongMaterial, RenderFragmentData};
+use crate::app::shader_modules::vs_mod_render::RenderVertexData;
+use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
+use crate::app::util::{CommonItems, MeshHolder, ObjectHolder};
+use crate::scripts::{get_instance_script, get_scene_object_script, InstanceScript, SceneObjectScript};
 use glam::Vec3;
 use serde::Deserialize;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
-use crate::scripts::{get_script, Script};
+//
 // ----- Data holders -----
 
 #[derive(Deserialize)]
 pub struct SceneLayoutConfig {
-    pub camera: Camera,
-    pub light: Light,
     pub scene_objects: Vec<SceneObjectConfig>,
 }
 
-pub struct SceneLayout {
-    pub camera_id: u32,
-    pub light_id: u32,
-    pub scene_entities: ObjectHolder<Box<dyn SceneEntity>>,
-    pub scene_tree_root: SceneTree,
-    pub scene_scripts: ObjectHolder<Box<dyn Script>>,
+pub struct SceneItems {
+    pub scene_objects: ObjectHolder<SceneObject>,
+    pub scene_tree_root_id: u32,
+    pub mesh_holder: MeshHolder,
+    pub scene_object_scripts: ObjectHolder<Box<dyn SceneObjectScript>>,
+    pub instance_scripts: ObjectHolder<Box<dyn InstanceScript>>,
 }
 
-pub struct SceneTree {
-    pub entity_id: u32,
-    pub children: Vec<SceneTree>
+#[derive(Deserialize, Clone)]
+pub struct Transform {
+    pub translation: Vec3,
+    pub rotation: Vec3,
+    pub scale: Vec3,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Camera {
+    pub active: bool,
+    pub fov: f32,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum Light {
+    Point {
+        active: bool,
+    },
+    Directional {
+        active: bool,
+    },
 }
 
 #[derive(Deserialize)]
 pub struct SceneObjectConfig {
     pub name: String,
-    pub translation: Vec3,
-    pub rotation: Vec3,
-    pub scale: Vec3,
+    pub transform: Transform,
 
     #[serde(default)]
     pub mesh_path: Option<String>,
     #[serde(default)]
     pub material_path: Option<String>,
+    #[serde(default)]
+    pub scene_object_script: Option<ScriptConfig>,
+    #[serde(default)]
+    pub instance_script: Option<ScriptConfig>,
 
     #[serde(default)]
-    pub script: Option<ScriptConfig>,
+    pub camera: Option<Camera>,
+    #[serde(default)]
+    pub light: Option<Light>,
 
-    pub children: Vec<SceneObjectConfig>
+    #[serde(default)]
+    pub children: Option<Vec<SceneObjectConfig>>
 }
 
+#[derive(Default)]
 pub struct SceneObject {
     pub id: u32,
 
     pub name: String,
-    pub translation: Vec3,
-    pub rotation: Vec3,
-    pub scale: Vec3,
+    pub transform: Transform,
 
     pub mesh_id: Option<u32>,
     pub material: Option<PhongMaterial>,
+    pub uniforms: Option<(ShadowVertexData, RenderVertexData, RenderFragmentData)>,
 
-    pub script_id: Option<u32>,
-}
+    pub scene_object_script_id: Option<u32>,
+    pub instance_script_id: Option<u32>,
 
-#[derive(Deserialize)]
-pub struct Camera {
-    #[serde(skip)]
-    pub id: u32,
+    pub camera: Option<Camera>,
+    pub light: Option<Light>,
 
-    pub position: Vec3,
-    // pub look_at: Vec3,
-    pub horizon: Vec3,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type")]
-pub enum Light {
-    Point {
-        #[serde(skip)]
-        id: u32,
-        position: Vec3
-    },
-    Directional {
-        #[serde(skip)]
-        id: u32,
-        direction: Vec3
-    },
+    pub children: Vec<u32>
 }
 
 #[derive(Deserialize)]
@@ -93,140 +97,66 @@ pub struct ScriptConfig {
     args: serde_json::Value,
 }
 
-pub struct SceneApi {
-    
+pub struct SceneApi<'api> {
+    pub scene_objects: &'api mut ObjectHolder<SceneObject>,
+    pub mesh_holder: &'api MeshHolder,
+    pub scene_object_scripts: &'api mut ObjectHolder<Box<dyn SceneObjectScript>>,
+    pub instance_scripts: &'api mut ObjectHolder<Box<dyn InstanceScript>>,
 }
 
 // ----- Functionality -----
 
-pub trait SceneEntity : WithId + ControlUi + TreeHeadingUi + Downcast {
-    fn get_name(&self) -> &str;
-}
-impl_downcast!(SceneEntity);
-
-impl SceneEntity for SceneObject {
-    fn get_name(&self) -> &str {
-        self.name.as_str()
-    }
-}
-impl SceneEntity for Camera {
-    fn get_name(&self) -> &str {
-        "Camera"
-    }
-}
-impl SceneEntity for Light {
-    fn get_name(&self) -> &str {
-        match self {
-            Light::Point { .. } => { "Point light" }
-            Light::Directional { .. } => { "Directional light" }
-        }
-    }
-}
-impl SceneEntity for Box<dyn SceneEntity> {
-    fn get_name(&self) -> &str {
-        self.as_ref().get_name()
-    }
-}
-
-impl Light {
-    pub fn get_point_light(&self) -> PointLight {
-        match self {
-            Light::Point { id: _, position } => {
-                PointLight { position: position.to_array(), used: 1 }
-            }
-            Light::Directional { .. } => {
-                PointLight { position: [0.0, 0.0, 0.0], used: 0 }
-            }
-        }
-    }
-
-    pub fn get_directional_light(&self) -> DirectionalLight {
-        match self {
-            Light::Point { .. } => {
-                DirectionalLight { direction: [0.0, 0.0, 0.0], used: 0 }
-            }
-            Light::Directional { id: _, direction } => {
-                DirectionalLight { direction: direction.to_array(), used: 1 }
-            }
-        }
-    }
-}
-
-impl SceneTree {
-    fn new(entity_id: u32) -> Self {
-        SceneTree {
-            entity_id,
-            children: Vec::new(),
-        }
-    }
-}
-
-impl SceneLayoutConfig {
-    pub fn parse(self, common_items: &CommonItems) -> (SceneLayout, MeshHolder) {
-        let scene_root = SceneObject {
-            id: Default::default(),
+impl SceneItems {
+    pub fn new(scene_layout_config: SceneLayoutConfig, common_items: &CommonItems) -> Self {
+        let mut scene_tree_root = SceneObject {
             name: "root".to_string(),
-            translation: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            mesh_id: None,
-            material: None,
-            script_id: None,
+            ..Default::default()
         };
 
-        let mut scene_entities: ObjectHolder<Box<dyn SceneEntity>> = ObjectHolder::new();
-
-        let root_id = scene_entities.set_id_and_add(Box::new(scene_root));
-        let mut scene_tree_root = SceneTree::new(root_id);
-
-        let camera_id = scene_entities.set_id_and_add(Box::new(self.camera));
-        let light_id = scene_entities.set_id_and_add(Box::new(self.light));
-        scene_tree_root.children.push(SceneTree::new(camera_id));
-        scene_tree_root.children.push(SceneTree::new(light_id));
-
-        let mut scene_scripts = ObjectHolder::new();
-
+        let mut scene_objects = ObjectHolder::new();
         let mut mesh_holder = MeshHolder::new();
+        let mut scene_object_scripts = ObjectHolder::new();
+        let mut instance_scripts = ObjectHolder::new();
 
         let working_dir = env::current_dir().unwrap();
-        Self::walk_through_tree(&self.scene_objects, common_items, &mut scene_entities,
-                                &mut scene_tree_root, &mut scene_scripts, &mut mesh_holder, &working_dir);
+        Self::walk_through_scene_tree_config(common_items, &working_dir, &mut mesh_holder,
+                                             &mut scene_object_scripts, &mut instance_scripts,
+                                             &mut scene_objects, &scene_layout_config.scene_objects, &mut scene_tree_root);
 
-        let mut scene_layout = SceneLayout {
-            camera_id,
-            light_id,
-            scene_entities,
-            scene_tree_root,
-            scene_scripts,
-        };
+        let scene_tree_root_id = scene_objects.set_id_and_add(scene_tree_root);
 
-        scene_layout.after_parsing();
-
-        (scene_layout, mesh_holder)
+        SceneItems {
+            scene_objects,
+            scene_tree_root_id,
+            mesh_holder,
+            scene_object_scripts,
+            instance_scripts
+        }
     }
 
-    fn walk_through_tree(scene_object_configs: &Vec<SceneObjectConfig>,
-                         common_items: &CommonItems,
-                         scene_entities: &mut ObjectHolder<Box<dyn SceneEntity>>, scene_tree: &mut SceneTree,
-                         scene_scripts: &mut ObjectHolder<Box<dyn Script>>,
-                         mesh_holder: &mut MeshHolder,
-                         working_dir: &PathBuf)
-    {
-        for scene_object_config in scene_object_configs
-        {
+    fn walk_through_scene_tree_config(common_items: &CommonItems,
+                                      working_dir: &PathBuf,
+                                      mesh_holder: &mut MeshHolder,
+                                      scene_object_scripts: &mut ObjectHolder<Box<dyn SceneObjectScript>>,
+                                      instance_scripts: &mut ObjectHolder<Box<dyn InstanceScript>>,
+                                      scene_objects: &mut ObjectHolder<SceneObject>,
+                                      scene_object_configs: &Vec<SceneObjectConfig>,
+                                      parent_scene_object: &mut SceneObject,
+    ) {
+        for scene_object_config in scene_object_configs {
             if scene_object_config.mesh_path.is_some() && scene_object_config.material_path.is_none() {
                 panic!("Material is required if mesh is present")
             }
+            if scene_object_config.scene_object_script.is_some() && scene_object_config.instance_script.is_some() {
+                panic!("Only one type of script allowed")
+            }
 
             let mut scene_object = SceneObject {
-                id: Default::default(),
                 name: scene_object_config.name.clone(),
-                translation: scene_object_config.translation,
-                rotation: scene_object_config.rotation,
-                scale: scene_object_config.scale,
-                mesh_id: None,
-                material: None,
-                script_id: None,
+                transform: scene_object_config.transform.clone(),
+                camera: scene_object_config.camera.clone(),
+                light: scene_object_config.light.clone(),
+                ..Default::default()
             };
 
             if let Some(mesh_name) = scene_object_config.mesh_path.as_ref() {
@@ -246,58 +176,107 @@ impl SceneLayoutConfig {
                     .expect("Incorrect material file");
             }
 
-            if let Some(script_config) = scene_object_config.script.as_ref() {
-                let script = get_script(script_config.name.as_str(), script_config.args.clone());
-                let script_id = scene_scripts.add(script);
-                scene_object.script_id = Some(script_id);
+            if let Some(script_config) = scene_object_config.scene_object_script.as_ref() {
+                let script = get_scene_object_script(script_config.name.as_str(), script_config.args.clone());
+                let script_id = scene_object_scripts.add(script);
+                scene_object.scene_object_script_id = Some(script_id);
+            }
+            if let Some(script_config) = scene_object_config.instance_script.as_ref() {
+                let script = get_instance_script(script_config.name.as_str(), script_config.args.clone());
+                let script_id = instance_scripts.add(script);
+                scene_object.instance_script_id = Some(script_id);
             }
 
-            let entity_id = scene_entities.set_id_and_add(Box::new(scene_object));
-            let mut child_tree = SceneTree::new(entity_id);
+            if let Some(children) = scene_object_config.children.as_ref() {
+                Self::walk_through_scene_tree_config(common_items, working_dir, mesh_holder,
+                                                     scene_object_scripts, instance_scripts,
+                                                     scene_objects, children, &mut scene_object);
+            }
 
-            Self::walk_through_tree(&scene_object_config.children, common_items, scene_entities,
-                                    &mut child_tree, scene_scripts, mesh_holder, working_dir);
+            let scene_object_id = scene_objects.set_id_and_add(scene_object);
+            parent_scene_object.children.push(scene_object_id);
+        }
+    }
 
-            scene_tree.children.push(child_tree);
+    // todo! temporary until deferred rendering
+    pub fn get_camera(&self) -> &SceneObject {
+        for (_, scene_object) in self.scene_objects.get_iter() {
+            if let Some(camera) = scene_object.camera.as_ref() {
+                if camera.active {
+                    return scene_object;
+                }
+            }
+        }
+        panic!("No camera found")
+    }
+    pub fn get_camera_mut(&mut self) -> &mut SceneObject {
+        for (_, scene_object) in self.scene_objects.get_iter_mut() {
+            if let Some(camera) = scene_object.camera.as_ref() {
+                if camera.active {
+                    return scene_object;
+                }
+            }
+        }
+        panic!("No camera found")
+    }
+    pub fn get_light(&self) -> &SceneObject {
+        for (_, scene_object) in self.scene_objects.get_iter() {
+            if let Some(light) = scene_object.light.as_ref() {
+                match light {
+                    Light::Point { active } => {
+                        if *active {
+                            return scene_object
+                        }
+                    }
+                    Light::Directional { active } => {
+                        if *active {
+                            return scene_object
+                        }
+                    }
+                }
+            }
+        }
+        panic!("No light found")
+    }
+    pub fn get_light_mut(&mut self) -> &mut SceneObject {
+        for (_, scene_object) in self.scene_objects.get_iter_mut() {
+            if let Some(light) = scene_object.light.as_ref() {
+                match light {
+                    Light::Point { active } => {
+                        if *active {
+                            return scene_object
+                        }
+                    }
+                    Light::Directional { active } => {
+                        if *active {
+                            return scene_object
+                        }
+                    }
+                }
+            }
+        }
+        panic!("No light found")
+    }
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Transform {
+            translation: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
         }
     }
 }
 
-impl SceneLayout {
-
-    pub fn get_camera(&self) -> &Camera {
-        self.scene_entities.get(self.camera_id)
-            .downcast_ref().unwrap()
-    }
-
-    pub fn get_camera_mut(&mut self) -> &mut Camera {
-        self.scene_entities.get_mut(self.camera_id)
-            .downcast_mut().unwrap()
-    }
-
-    pub fn get_light(&self) -> &Light {
-        self.scene_entities.get(self.light_id)
-            .downcast_ref().unwrap()
-    }
-
-    pub fn get_light_mut(&mut self) -> &mut Light {
-        self.scene_entities.get_mut(self.light_id)
-            .downcast_mut().unwrap()
-    }
-
-    fn after_parsing(&mut self) {
-        match self.get_light_mut() {
-            Light::Point { .. } => {}
-            Light::Directional { id: _, direction } => {
-                *direction = direction.normalize();
-            }
-        }
-    }
-}
-
-impl SceneApi {
+impl SceneApi<'_> {
     
-    pub fn new(scene_layout: &mut SceneLayout) -> SceneApi {
-        SceneApi {}
+    pub fn new(scene_items: &'_ mut SceneItems) -> SceneApi<'_> {
+        SceneApi {
+            scene_objects: &mut scene_items.scene_objects,
+            mesh_holder: &scene_items.mesh_holder,
+            scene_object_scripts: &mut scene_items.scene_object_scripts,
+            instance_scripts: &mut scene_items.instance_scripts,
+        }
     }
 }

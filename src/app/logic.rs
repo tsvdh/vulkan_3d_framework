@@ -1,18 +1,16 @@
 use crate::app::rendering::RenderItems;
-use crate::app::scene::{Light, SceneEntity, SceneLayout, SceneObject, SceneTree};
-use crate::app::shader_modules::fs_mod_render::{RenderFragmentData, Lights};
+use crate::app::scene::{Light, SceneItems, SceneObject};
+use crate::app::shader_modules::fs_mod_render::RenderFragmentData;
 use crate::app::shader_modules::vs_mod_render::RenderVertexData;
-use crate::app::timing::TimingItems;
-use glam::{Mat4, Quat, Vec3};
-use std::collections::BTreeSet;
-use std::f32::consts::FRAC_PI_2;
-use winit::event::KeyEvent;
-use winit::keyboard::KeyCode::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp, KeyT, PageDown, PageUp};
-use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
-use crate::app::{AppApi, UniformHolder};
+use crate::app::timing::TimingItems;
 use crate::app::util::{radians_from_degrees, ObjectHolder};
-use crate::scripts::Script;
+use crate::app::AppApi;
+use glam::{Mat4, Quat, Vec3, Vec4, Vec4Swizzles};
+use std::collections::{BTreeMap, BTreeSet};
+use winit::event::KeyEvent;
+use winit::keyboard::KeyCode::KeyT;
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 pub struct LogicItems {
     // public
@@ -27,9 +25,9 @@ pub struct LogicItems {
     keys_down: BTreeSet<KeyCode>,
 }
 
-pub struct LogicApi<'a> {
-    pub keys_pressed: &'a BTreeSet<KeyCode>,
-    pub keys_down: &'a BTreeSet<KeyCode>,
+pub struct LogicApi<'api> {
+    pub keys_pressed: &'api BTreeSet<KeyCode>,
+    pub keys_down: &'api BTreeSet<KeyCode>,
 }
 
 impl LogicItems {
@@ -67,9 +65,8 @@ impl LogicItems {
         }
     }
 
-    fn handle_input(&mut self, frame_duration: f32,
-                    timing_items: &mut TimingItems,
-                    scene_layout: &mut SceneLayout)
+    fn handle_input(&mut self,
+                    timing_items: &mut TimingItems,)
     {
         let keys_pressed = &self.keys_pressed;
         let keys_down = &self.keys_down;
@@ -77,174 +74,149 @@ impl LogicItems {
         if keys_pressed.contains(&KeyT) {
             timing_items.show_frame_times = !timing_items.show_frame_times;
         }
-
-        // camera controls
-        // rotate 90 degrees (pi/2) in 1 sec
-        // zoom 1m in 1 sec
-
-        let mut vertical_angle_diff = FRAC_PI_2 * frame_duration;
-        let mut horizontal_angle_diff = FRAC_PI_2 * frame_duration;
-        if keys_down.contains(&ArrowDown) {
-            vertical_angle_diff *= -1.0;
-        }
-        if keys_down.contains(&ArrowLeft) {
-            horizontal_angle_diff *= -1.0;
-        }
-
-        let camera = scene_layout.get_camera_mut();
-
-        if keys_down.contains(&ArrowUp) || keys_down.contains(&ArrowDown) {
-            camera.position = camera.position.rotate_axis(camera.horizon, vertical_angle_diff);
-        }
-        if keys_down.contains(&ArrowLeft) || keys_down.contains(&ArrowRight) {
-            camera.position = camera.position.rotate_y(horizontal_angle_diff);
-            camera.horizon = camera.horizon.rotate_y(horizontal_angle_diff);
-        }
-
-        let mut distance_diff = 1.0 * frame_duration;
-        if keys_down.contains(&PageDown) {
-            distance_diff *= -1.0;
-        }
-        if keys_down.contains(&PageUp) || keys_down.contains(&PageDown) {
-            camera.position += (Vec3::ZERO - camera.position).normalize() * distance_diff;
-        }
     }
 
     pub fn base_logic(&mut self,
                       timing_items: &mut TimingItems,
                       render_items: &RenderItems,
-                      scene_layout: &mut SceneLayout,
-                      uniform_holder: &mut UniformHolder,
+                      scene_items: &mut SceneItems,
     ) {
-        let frame_duration = timing_items.get_frame_duration();
-        self.handle_input(frame_duration, timing_items, scene_layout);
+        self.handle_input(timing_items);
 
-        let view_proj_camera_matrix = make_view_proj_camera_matrix(render_items, scene_layout);
-        let view_proj_light_matrix = make_view_proj_light_matrix(scene_layout);
-        let f_lights = Lights {
-            point_light: scene_layout.get_light().get_point_light(),
-            directional_light: scene_layout.get_light().get_directional_light(),
-        };
+        let mut model_matrices = BTreeMap::new();
+        Self::make_model_matrices(&mut scene_items.scene_objects, &mut model_matrices, Mat4::IDENTITY,
+                                  scene_items.scene_tree_root_id);
 
-        let mut app_api = AppApi::new(self, scene_layout, timing_items);
+        Self::set_uniforms(scene_items, render_items, &mut model_matrices);
 
-        Self::walk_through_tree_scripts(&scene_layout.scene_tree_root, &mut scene_layout.scene_entities,
-                                        &mut scene_layout.scene_scripts, &mut app_api);
-
-        Self::walk_through_tree_uniforms(&scene_layout.scene_tree_root, &scene_layout.scene_entities,
-                                         &view_proj_camera_matrix, &view_proj_light_matrix, &Mat4::IDENTITY,
-                                         uniform_holder,
-                                         &f_lights, &scene_layout.get_camera().position.to_array(), );
+        let mut app_api = AppApi::new(self, scene_items, timing_items);
+        Self::execute_scripts(&mut app_api);
 
         self.keys_pressed.clear();
     }
 
-    fn walk_through_tree_uniforms(scene_tree: &SceneTree, scene_entities: &ObjectHolder<Box<dyn SceneEntity>>,
-                                  view_proj_camera_matrix: &Mat4, view_proj_light_matrix: &Mat4, prev_model_matrix: &Mat4,
-                                  uniform_holder: &mut UniformHolder,
-                                  f_lights: &Lights, f_camera_pos: &[f32; 3]
+    fn make_model_matrices(scene_objects: &ObjectHolder<SceneObject>,
+                           model_matrices: &mut BTreeMap<u32, Mat4>, prev_model_matrix: Mat4,
+                           cur_scene_object_id: u32
     ) {
-        let cur_entity = scene_entities.get(scene_tree.entity_id);
-        if cur_entity.downcast_ref::<SceneObject>().is_none() {
-            if !scene_tree.children.is_empty() {
-                panic!("Only scene objects can have children")
-            }
-            return;
-        }
+        let cur_scene_object = scene_objects.get(cur_scene_object_id);
+        let cur_model_matrix = prev_model_matrix * make_model_matrix(cur_scene_object);
+        model_matrices.insert(cur_scene_object.id, cur_model_matrix);
 
-        let cur_object = cur_entity.downcast_ref::<SceneObject>().unwrap();
-
-        let cur_model_matrix = prev_model_matrix * make_model_matrix(cur_object);
-        let cur_model_normals_matrix = cur_model_matrix.inverse().transpose();
-        let cur_mvp_light_matrix = view_proj_light_matrix * cur_model_matrix;
-
-        let shadow_vertex_data = ShadowVertexData {
-            mvp_light: cur_mvp_light_matrix.to_cols_array_2d(),
-        };
-        let render_vertex_data = RenderVertexData {
-            model: cur_model_matrix.to_cols_array_2d(),
-            model_normals: cur_model_normals_matrix.to_cols_array_2d(),
-            view_proj_camera: view_proj_camera_matrix.to_cols_array_2d(),
-            view_proj_light: view_proj_light_matrix.to_cols_array_2d(),
-        };
-        let render_fragment_data = RenderFragmentData {
-            material: cur_object.material.unwrap_or_default().into(),
-            lights: *f_lights,
-            camera_pos: *f_camera_pos,
-        };
-
-        uniform_holder.insert(cur_object.id, (shadow_vertex_data, render_vertex_data, render_fragment_data));
-
-        for child in scene_tree.children.iter() {
-            Self::walk_through_tree_uniforms(child, scene_entities, view_proj_camera_matrix, view_proj_light_matrix,
-                                             &cur_model_matrix, uniform_holder, f_lights, f_camera_pos);
+        for child_id in cur_scene_object.children.iter() {
+            Self::make_model_matrices(scene_objects, model_matrices, cur_model_matrix, *child_id);
         }
     }
 
-    fn walk_through_tree_scripts(scene_tree: &SceneTree, scene_entities: &mut ObjectHolder<Box<dyn SceneEntity>>,
-                                 scene_scripts: &mut ObjectHolder<Box<dyn Script>>,
-                                 app_api: &mut AppApi)
-    {
-        let cur_entity = scene_entities.get_mut(scene_tree.entity_id);
-        if cur_entity.downcast_ref::<SceneObject>().is_none() {
-            if !scene_tree.children.is_empty() {
-                panic!("Only scene objects can have children")
+    fn set_uniforms(scene_items: &mut SceneItems, render_items: &RenderItems,
+                    model_matrices: &mut BTreeMap<u32, Mat4>,
+    ) {
+        let light_id = scene_items.get_light().id;
+        let camera_id = scene_items.get_camera().id;
+
+        let model_light_matrix = model_matrices.get(&light_id).unwrap();
+        let model_camera_matrix = model_matrices.get(&camera_id).unwrap();
+
+        let view_proj_light_matrix = make_proj_light_matrix(scene_items) * model_light_matrix.inverse();
+        let view_proj_camera_matrix = make_view_proj_camera_matrix(scene_items, render_items) * model_camera_matrix.inverse();
+
+        for (_, cur_scene_object) in scene_items.scene_objects.get_iter_mut()
+        {
+            if cur_scene_object.mesh_id.is_none() {
+                continue;
             }
-            return;
+
+            let cur_model_matrix = model_matrices.get(&cur_scene_object.id).unwrap();
+            let cur_model_normals_matrix = cur_model_matrix.inverse().transpose();
+            let cur_mvp_light_matrix = view_proj_light_matrix * cur_model_matrix;
+
+            let shadow_vertex_data = ShadowVertexData {
+                mvp_light: cur_mvp_light_matrix.to_cols_array_2d(),
+            };
+            let render_vertex_data = RenderVertexData {
+                model: cur_model_matrix.to_cols_array_2d(),
+                model_normals: cur_model_normals_matrix.to_cols_array_2d(),
+                view_proj_camera: view_proj_camera_matrix.to_cols_array_2d(),
+                view_proj_light: view_proj_light_matrix.to_cols_array_2d(),
+            };
+            let render_fragment_data = RenderFragmentData {
+                material: cur_scene_object.material.unwrap_or_default().into(),
+                light_dir: (model_light_matrix.inverse().transpose() * Vec4::new(0.0, 0.0, 1.0, 1.0)).xyz().to_array().into(),
+                camera_pos: (model_camera_matrix * Vec4::new(0.0, 0.0, 0.0, 1.0)).xyz().to_array(),
+            };
+
+            cur_scene_object.uniforms = Some((shadow_vertex_data, render_vertex_data, render_fragment_data));
         }
+    }
 
-        let cur_object = cur_entity.downcast_mut::<SceneObject>().unwrap();
+    fn execute_scripts(app_api: &mut AppApi)
+    {
+        for scene_object_id in app_api.scene_api.scene_objects.get_ids()
+        {
+            let mut scene_object = app_api.scene_api.scene_objects.remove(scene_object_id);
 
-        if let Some(script_id) = cur_object.script_id {
-            scene_scripts.get_mut(script_id).frame_update(cur_object, app_api);
-        }
+            if let Some(script_id) = scene_object.scene_object_script_id {
+                let mut script = app_api.scene_api.scene_object_scripts.remove(script_id);
+                script.frame_update(&mut scene_object, app_api);
+                app_api.scene_api.scene_object_scripts.insert_at_id(script_id, script);
+            }
+            if let Some(script_id) = scene_object.instance_script_id {
+                let mut script = app_api.scene_api.instance_scripts.remove(script_id);
+                script.frame_update(&mut scene_object, app_api);
+                script.test();
+                app_api.scene_api.instance_scripts.insert_at_id(script_id, script);
+            }
 
-        for child in scene_tree.children.iter() {
-            Self::walk_through_tree_scripts(child, scene_entities, scene_scripts, app_api);
+            app_api.scene_api.scene_objects.insert(scene_object);
         }
     }
 }
 
-fn make_view_proj_camera_matrix(render_items: &RenderItems, scene_layout: &SceneLayout) -> Mat4 {
+fn make_view_proj_camera_matrix(scene_items: &SceneItems, render_items: &RenderItems) -> Mat4 {
+    let camera =  scene_items.get_camera().camera.as_ref().unwrap();
+
     let image_extent = render_items.swapchain.image_extent();
     let aspect_ratio = image_extent[0] as f32 / image_extent[1] as f32;
     let projection = Mat4::perspective_lh(
-        radians_from_degrees(65.0),
+        radians_from_degrees(camera.fov),
         aspect_ratio,
         0.1,
         100.0
     );
 
-    let view = Mat4::look_at_lh(
-        scene_layout.get_camera().position,
+    let view = Mat4::look_to_lh(
         Vec3::ZERO,
+        Vec3::Z,
         Vec3::NEG_Y
     );
 
     projection * view
 }
 
-fn make_view_proj_light_matrix(scene_layout: &SceneLayout) -> Mat4 {
-    match scene_layout.get_light() {
+fn make_proj_light_matrix(scene_items: &SceneItems) -> Mat4 {
+    match scene_items.get_light().light.as_ref().unwrap() {
         Light::Point { .. } => {
             panic!("Point light not implemented yet")
         }
-        Light::Directional { direction, .. } => {
+        Light::Directional { .. } => {
             let box_size = 10f32;
             let projection = Mat4::orthographic_lh(-box_size, box_size, -box_size, box_size, -box_size, box_size);
-            let view = Mat4::look_to_lh(Vec3::ZERO, *direction, direction.any_orthonormal_vector());
-            projection * view
+            projection
         }
     }
 }
 
 fn make_model_matrix(scene_object: &SceneObject) -> Mat4 {
     let rotation_quaternion =
-        Quat::from_rotation_x(radians_from_degrees(scene_object.rotation.x))
-            * Quat::from_rotation_y(radians_from_degrees(scene_object.rotation.y))
-            * Quat::from_rotation_z(radians_from_degrees(scene_object.rotation.z));
+              Quat::from_rotation_x(radians_from_degrees(scene_object.transform.rotation.x))
+            * Quat::from_rotation_y(radians_from_degrees(scene_object.transform.rotation.y))
+            * Quat::from_rotation_z(radians_from_degrees(scene_object.transform.rotation.z));
 
-    Mat4::from_scale_rotation_translation(scene_object.scale, rotation_quaternion, scene_object.translation)
+    Mat4::from_scale_rotation_translation(
+        scene_object.transform.scale,
+        rotation_quaternion,
+        scene_object.transform.translation
+    )
 }
 
 impl LogicApi<'_> {
