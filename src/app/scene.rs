@@ -26,8 +26,11 @@ pub struct SceneItems {
 
 #[derive(Deserialize, Clone)]
 pub struct Transform {
+    #[serde(default)]
     pub translation: Vec3,
+    #[serde(default)]
     pub rotation: Vec3,
+    #[serde(default = "Transform::default_scale")]
     pub scale: Vec3,
 }
 
@@ -51,6 +54,7 @@ pub enum Light {
 #[derive(Deserialize)]
 pub struct SceneObjectConfig {
     pub name: String,
+    #[serde(default)]
     pub transform: Transform,
 
     #[serde(default)]
@@ -267,6 +271,9 @@ impl Default for Transform {
             scale: Vec3::ONE,
         }
     }
+}
+impl Transform {
+    fn default_scale() -> Vec3 { Vec3::ONE }
 }
 
 impl SceneApi<'_> {
