@@ -79,7 +79,7 @@
       "scene_object_script": {
         "name": "rotate",
         "args": {
-          "speed": 45,
+          "speed": 0,
           "axis": "Z"
         }
       }

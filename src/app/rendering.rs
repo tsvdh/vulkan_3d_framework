@@ -5,17 +5,17 @@ use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
 use crate::app::shader_modules::{fs_mod_render, fs_mod_shadow, vs_mod_render, vs_mod_shadow};
 use crate::app::timing::TimingItems;
 use crate::app::ui::GuiItems;
-use crate::app::util::{CommonItems};
+use crate::app::util::{get_sample_count, CommonItems};
 use log::{info, warn};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::buffer::Subbuffer;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderingAttachmentInfo, RenderingInfo};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderingAttachmentInfo, RenderingAttachmentResolveInfo, RenderingInfo};
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::format::Format;
 use vulkano::image::sampler::{Sampler, SamplerCreateInfo};
 use vulkano::image::view::ImageView;
-use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
+use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage, SampleCount};
 use vulkano::memory::allocator::AllocationCreateInfo;
 use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
@@ -28,11 +28,12 @@ use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::pipeline::{DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
-use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
+use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp, ResolveMode};
 use vulkano::swapchain::{acquire_next_image, PresentMode, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError};
 use winit::window::Window;
+use crate::app::Config;
 
 const SHADOW_MAP_EXTENT: [u32; 2] = [2048, 2048];
 
@@ -48,6 +49,7 @@ pub struct RenderItems {
 
     // access through methods
     recreate_swapchain: bool,
+    sample_count: SampleCount,
 
     // private
     shadow_attachment_image_view: Arc<ImageView>,
@@ -55,8 +57,9 @@ pub struct RenderItems {
     shadow_viewport: Viewport,
     shadow_map_sampler: Arc<Sampler>,
 
-    color_attachment_image_views: Vec<Arc<ImageView>>,
+    color_attachment_image_view: Arc<ImageView>,
     depth_attachment_image_view: Arc<ImageView>,
+    swapchain_image_views: Vec<Arc<ImageView>>,
     render_pipeline: Arc<GraphicsPipeline>,
     render_viewport: Viewport,
 
@@ -70,8 +73,11 @@ impl RenderItems {
 
     pub fn new(common_items: &CommonItems,
                window: Arc<Window>,
-               scene_items: &SceneItems
+               scene_items: &SceneItems,
+               config: &Config,
     ) -> Self {
+        let sample_count = get_sample_count(common_items, config.multisample_samples);
+
         let surface = Surface::from_window(common_items.instance.clone(), window.clone()).unwrap();
 
         let (swapchain, images) = {
@@ -96,8 +102,10 @@ impl RenderItems {
         };
 
         let (shadow_image_view,
-             color_image_views,
-             depth_image_view) = make_image_views(&common_items, &images);
+            color_image_view,
+            depth_image_view,
+            swapchain_image_views
+        ) = make_image_views(&common_items, &images, sample_count);
 
         let shadow_pipeline = {
             let vertex_shader_module = vs_mod_shadow::load(common_items.device.clone()).expect("Failed to create shader");
@@ -181,14 +189,17 @@ impl RenderItems {
                     input_assembly_state: Some(InputAssemblyState::default()),
                     viewport_state: Some(ViewportState::default()),
                     rasterization_state: Some(RasterizationState {
-                        cull_mode: CullMode::Back,
+                        cull_mode: CullMode::None,
                         ..Default::default()
                     }),
                     depth_stencil_state: Some(DepthStencilState {
                         depth: Some(DepthState::simple()),
                         ..Default::default()
                     }),
-                    multisample_state: Some(MultisampleState::default()),
+                    multisample_state: Some(MultisampleState {
+                        rasterization_samples: sample_count,
+                        ..Default::default()
+                    }),
                     color_blend_state: Some(ColorBlendState::with_attachment_states(
                         dynamic_rendering_info.color_attachment_formats.len() as u32,
                         ColorBlendAttachmentState::default()
@@ -232,7 +243,7 @@ impl RenderItems {
         RenderItems {
             window,
             swapchain,
-            color_attachment_image_views: color_image_views,
+            color_attachment_image_view: color_image_view,
             depth_attachment_image_view: depth_image_view,
             render_pipeline,
             recreate_swapchain: false,
@@ -241,7 +252,9 @@ impl RenderItems {
             shadow_attachment_image_view: shadow_image_view,
             shadow_viewport,
             render_viewport,
-            shadow_map_sampler
+            shadow_map_sampler,
+            swapchain_image_views,
+            sample_count
         }
     }
 
@@ -272,8 +285,9 @@ impl RenderItems {
 
             self.swapchain = new_swapchain;
             (self.shadow_attachment_image_view,
-             self.color_attachment_image_views,
-             self.depth_attachment_image_view) = make_image_views(common_items, &new_images);
+             self.color_attachment_image_view,
+             self.depth_attachment_image_view,
+             self.swapchain_image_views) = make_image_views(common_items, &new_images, self.sample_count);
             self.render_viewport.extent = new_window_size.into();
             self.recreate_swapchain = false;
         }
@@ -321,7 +335,7 @@ impl RenderItems {
                                                         pipeline.layout().clone(), 0, descriptor_set).unwrap();
 
             // --- mesh buffers ---
-            let (vertex_buffer, 
+            let (vertex_buffer,
                 index_buffer) = scene_items.mesh_holder.get_by_id(scene_object.mesh_id.unwrap());
 
             command_buffer_builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
@@ -343,7 +357,7 @@ impl RenderItems {
                         scene_items: &SceneItems,
     ) {
         let image_index = acquire_future.image_index();
-        let image_view = self.color_attachment_image_views[image_index as usize].clone();
+        let swapchain_image_view = self.swapchain_image_views[image_index as usize].clone();
 
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
             common_items.command_buffer_allocator.clone(),
@@ -383,6 +397,20 @@ impl RenderItems {
             }
         );
 
+        let color_attachment_resolve = match self.sample_count {
+            SampleCount::Sample1 => { None }
+            _ => {
+                Some(RenderingAttachmentResolveInfo {
+                    mode: ResolveMode::Average,
+                    ..RenderingAttachmentResolveInfo::image_view(swapchain_image_view.clone())
+                })
+            }
+        };
+        let color_attachment_view = match self.sample_count {
+            SampleCount::Sample1 => { swapchain_image_view.clone() }
+            _ => { self.color_attachment_image_view.clone() }
+        };
+
         self.draw_objects(
             scene_items, &mut command_buffer_builder,
             RenderingInfo {
@@ -390,7 +418,8 @@ impl RenderItems {
                     load_op: AttachmentLoadOp::Clear,
                     store_op: AttachmentStoreOp::Store,
                     clear_value: Some([0.0, 0.0, 0.0, 1.0].into()),
-                    ..RenderingAttachmentInfo::image_view(image_view.clone())
+                    resolve_info: color_attachment_resolve,
+                    ..RenderingAttachmentInfo::image_view(color_attachment_view.clone())
                 })],
                 depth_attachment: Some(RenderingAttachmentInfo {
                     load_op: AttachmentLoadOp::Clear,
@@ -434,8 +463,8 @@ impl RenderItems {
         let scene_future = acquire_future
             .then_execute(common_items.queue.clone(), command_buffer.clone()).unwrap();
 
-        let complete_future = gui_items.gui
-            .draw_on_image(scene_future, image_view.clone())
+        let complete_future
+            = gui_items.gui.draw_on_image(scene_future, swapchain_image_view.clone())
             .then_swapchain_present(common_items.queue.clone(),
                                     SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index))
             .boxed_send()
@@ -457,28 +486,13 @@ impl RenderItems {
     }
 }
 
-fn make_image_views(vulkan_items: &CommonItems, images: &[Arc<Image>]) -> (Arc<ImageView>, Vec<Arc<ImageView>>, Arc<ImageView>) {
-    let color_image_views = images.iter().map(|image| {
-        ImageView::new_default(image.clone()).unwrap()
-    }).collect();
-
-    let depth_image_view = ImageView::new_default(
-        Image::new(
-            vulkan_items.memory_allocator.clone(),
-            ImageCreateInfo {
-                image_type: ImageType::Dim2d,
-                format: Format::D16_UNORM,
-                extent: images[0].extent(),
-                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
-                ..Default::default()
-            },
-            AllocationCreateInfo::default()
-        ).unwrap()
-    ).unwrap();
-
+/// RETURNS: `shadow_image_view`, `color_image_view`, `depth_image_view`, `swapchain_image_views`
+fn make_image_views(common_items: &CommonItems, swapchain_images: &[Arc<Image>], sample_count: SampleCount)
+                    -> (Arc<ImageView>, Arc<ImageView>, Arc<ImageView>, Vec<Arc<ImageView>>)
+{
     let shadow_image_view = ImageView::new_default(
         Image::new(
-            vulkan_items.memory_allocator.clone(),
+            common_items.memory_allocator.clone(),
             ImageCreateInfo {
                 image_type: ImageType::Dim2d,
                 format: Format::D16_UNORM,
@@ -490,5 +504,39 @@ fn make_image_views(vulkan_items: &CommonItems, images: &[Arc<Image>]) -> (Arc<I
         ).unwrap()
     ).unwrap();
 
-    (shadow_image_view, color_image_views, depth_image_view)
+    let color_image_view = ImageView::new_default(
+        Image::new(
+            common_items.memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: swapchain_images[0].format(),
+                extent: swapchain_images[0].extent(),
+                usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                samples: sample_count,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default()
+        ).unwrap()
+    ).unwrap();
+
+    let depth_image_view = ImageView::new_default(
+        Image::new(
+            common_items.memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::D16_UNORM,
+                extent: swapchain_images[0].extent(),
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                samples: sample_count,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default()
+        ).unwrap()
+    ).unwrap();
+
+    let swapchain_image_views = swapchain_images.iter().map(|image| {
+        ImageView::new_default(image.clone()).unwrap()
+    }).collect();
+
+    (shadow_image_view, color_image_view, depth_image_view, swapchain_image_views)
 }

@@ -28,6 +28,7 @@ use winit::window::{Window, WindowId};
 pub struct Config {
     pub resolution: [u32; 2],
     pub show_frame_times: bool,
+    pub multisample_samples: u32,
 }
 
 pub struct App {
@@ -122,7 +123,7 @@ impl ApplicationHandler for App {
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         self.render_items = InitOption::some(
-            RenderItems::new(&self.common_items, window.clone(), &self.scene_items)
+            RenderItems::new(&self.common_items, window.clone(), &self.scene_items, &self.config)
         );
         if self.render_items.swapchain.image_count() != 2 {
             panic!("Swapchain should contain exactly two images");

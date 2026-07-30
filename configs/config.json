@@ -1,4 +1,5 @@
 {
   "show_frame_times": false,
-  "resolution": [1500, 1000]
+  "resolution": [1500, 1000],
+  "multisample_samples": 4
 }

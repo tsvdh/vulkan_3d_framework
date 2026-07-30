@@ -14,6 +14,7 @@ use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, Standar
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::physical::PhysicalDeviceType;
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo, QueueFlags};
+use vulkano::image::SampleCount;
 use vulkano::instance::debug::{DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger, DebugUtilsMessengerCallback, DebugUtilsMessengerCreateInfo};
 use vulkano::instance::{Instance, InstanceCreateInfo, InstanceExtensions};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
@@ -377,4 +378,24 @@ pub fn load_mesh(path: &PathBuf, common_items: &CommonItems) -> (Subbuffer<[Vert
     ).unwrap();
 
     (vertex_buffer, index_buffer)
+}
+
+pub fn get_sample_count(common_items: &CommonItems, samples: u32) -> SampleCount {
+    let allowed_sample_counts = common_items.device.physical_device().properties().framebuffer_color_sample_counts;
+
+    let specified_sample_count = match samples {
+        1 => SampleCount::Sample1,
+        2 => SampleCount::Sample2,
+        4 => SampleCount::Sample4,
+        8 => SampleCount::Sample8,
+        16 => SampleCount::Sample16,
+        32 => SampleCount::Sample32,
+        _ => { panic!("Invalid number of samples")}
+    };
+
+    if allowed_sample_counts.contains_enum(specified_sample_count) {
+        specified_sample_count
+    } else {
+        panic!("Unavailable number of samples")
+    }
 }
