@@ -1,10 +1,11 @@
 use std::ops::DerefMut;
 use crate::app::rendering::RenderItems;
 use crate::app::scene::{Camera, Light, SceneApi, SceneItems, SceneObject};
-use crate::app::util::{CommonItems, WithId};
+use crate::app::util::{deg_from_rad, CommonItems, WithId, rad_from_deg};
 use crate::scripts::{InstanceScript, SceneObjectScript};
 use egui::{collapsing_header, Align, Atoms, Context, DragValue, Frame, Layout, MenuBar, Panel, RichText, TextStyle, Ui, UiBuilder};
 use egui_winit_vulkano::{Gui, GuiConfig};
+use glam::{EulerRot, Quat};
 use vulkano::image::SampleCount;
 use winit::event_loop::ActiveEventLoop;
 
@@ -274,14 +275,25 @@ impl ControlUi for SceneObject {
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("Transform").size(TEXT_SIZE + 2.0))
         });
+
         ui.label("Translation");
-        vec3_drag_values(ui, &mut self.transform.translation.as_mut(), 0.1);
+        vec3_drag_values(ui, self.transform.translation.as_mut(), 0.1);
+
+        let mut rotation_euler: [f32; 3] = self.transform.rotation.to_euler(EulerRot::XYZ).into();
+        for i in 0..3 {
+            rotation_euler[i] = deg_from_rad(rotation_euler[i]);
+        }
         ui.add_space(8.0);
         ui.label("Rotation");
-        vec3_drag_values(ui, &mut self.transform.rotation.as_mut(), 1.0);
+        vec3_drag_values(ui, &mut rotation_euler, 1.0);
+        self.transform.rotation = Quat::from_euler(EulerRot::XYZ,
+                                                   rad_from_deg(rotation_euler[0]),
+                                                   rad_from_deg(rotation_euler[1]),
+                                                   rad_from_deg(rotation_euler[2]));
+
         ui.add_space(8.0);
         ui.label("Scale");
-        vec3_drag_values(ui, &mut self.transform.scale.as_mut(), 0.1);
+        vec3_drag_values(ui, self.transform.scale.as_mut(), 0.02);
 
         fn attribute_control_ui(name: &str, opt_attribute: Option<&mut impl ControlUi>, ui: &mut Ui, scene_api: &mut SceneApi) {
             if let Some(attribute) = opt_attribute {

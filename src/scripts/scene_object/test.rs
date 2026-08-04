@@ -5,8 +5,9 @@ use log::info;
 use serde::Deserialize;
 use crate::app::scene::{SceneApi, SceneObject};
 use crate::app::ui::ControlUi;
+use crate::app::util::GlobalTransformData;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct Args {
     message: String,
 }
@@ -27,7 +28,7 @@ impl Test {
 
 impl SceneObjectScript for Test {
 
-    fn frame_update(&mut self, cur_object: &mut SceneObject, app_api: &mut AppApi) {
+    fn frame_update(&mut self, cur_object: &mut SceneObject, global_transform_data: &GlobalTransformData, app_api: &mut AppApi) {
         if !self.said_hello {
             self.said_hello = true;
             info!("Hello from script!");

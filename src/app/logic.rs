@@ -4,7 +4,7 @@ use crate::app::shader_modules::fs_mod_render::RenderFragmentData;
 use crate::app::shader_modules::vs_mod_render::RenderVertexData;
 use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
 use crate::app::timing::TimingItems;
-use crate::app::util::{radians_from_degrees, ObjectHolder};
+use crate::app::util::{rad_from_deg, ObjectHolder, GlobalTransformData};
 use crate::app::AppApi;
 use glam::{Mat4, Quat, Vec3, Vec4, Vec4Swizzles};
 use std::collections::{BTreeMap, BTreeSet};
@@ -90,7 +90,7 @@ impl LogicItems {
         Self::set_uniforms(scene_items, render_items, &mut model_matrices);
 
         let mut app_api = AppApi::new(self, scene_items, timing_items);
-        Self::execute_scripts(&mut app_api);
+        Self::execute_scripts(&mut app_api, &mut model_matrices);
 
         self.keys_pressed.clear();
     }
@@ -149,20 +149,21 @@ impl LogicItems {
         }
     }
 
-    fn execute_scripts(app_api: &mut AppApi)
+    fn execute_scripts(app_api: &mut AppApi, model_matrices: &mut BTreeMap<u32, Mat4>)
     {
         for scene_object_id in app_api.scene_api.scene_objects.get_ids()
         {
             let mut scene_object = app_api.scene_api.scene_objects.remove(scene_object_id);
+            let global_transform_data = GlobalTransformData::new(model_matrices.get(&scene_object_id).unwrap());
 
             if let Some(script_id) = scene_object.scene_object_script_id {
                 let mut script = app_api.scene_api.scene_object_scripts.remove(script_id);
-                script.frame_update(&mut scene_object, app_api);
+                script.frame_update(&mut scene_object, &global_transform_data, app_api);
                 app_api.scene_api.scene_object_scripts.insert_at_id(script_id, script);
             }
             if let Some(script_id) = scene_object.instance_script_id {
                 let mut script = app_api.scene_api.instance_scripts.remove(script_id);
-                script.frame_update(&mut scene_object, app_api);
+                script.frame_update(&mut scene_object, &global_transform_data, app_api);
                 script.test();
                 app_api.scene_api.instance_scripts.insert_at_id(script_id, script);
             }
@@ -178,12 +179,13 @@ fn make_view_proj_camera_matrix(scene_items: &SceneItems, render_items: &RenderI
     let image_extent = render_items.swapchain.image_extent();
     let aspect_ratio = image_extent[0] as f32 / image_extent[1] as f32;
     let projection = Mat4::perspective_lh(
-        radians_from_degrees(camera.fov),
+        rad_from_deg(camera.fov),
         aspect_ratio,
         0.1,
         100.0
     );
 
+    
     let view = Mat4::look_to_lh(
         Vec3::ZERO,
         Vec3::Z,
@@ -207,14 +209,9 @@ fn make_proj_light_matrix(scene_items: &SceneItems) -> Mat4 {
 }
 
 fn make_model_matrix(scene_object: &SceneObject) -> Mat4 {
-    let rotation_quaternion =
-              Quat::from_rotation_x(radians_from_degrees(scene_object.transform.rotation.x))
-            * Quat::from_rotation_y(radians_from_degrees(scene_object.transform.rotation.y))
-            * Quat::from_rotation_z(radians_from_degrees(scene_object.transform.rotation.z));
-
     Mat4::from_scale_rotation_translation(
         scene_object.transform.scale,
-        rotation_quaternion,
+        scene_object.transform.rotation,
         scene_object.transform.translation
     )
 }

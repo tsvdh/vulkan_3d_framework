@@ -8,6 +8,9 @@
       "camera": {
         "active": true,
         "fov": 65
+      },
+      "scene_object_script": {
+        "name": "camera_control"
       }
     },
     {
@@ -75,14 +78,7 @@
         "rotation": [0, 180, 0]
       },
       "mesh_path": "bunny_face_normals.obj",
-      "material_path": "orange.json",
-      "scene_object_script": {
-        "name": "rotate",
-        "args": {
-          "speed": 0,
-          "axis": "Z"
-        }
-      }
+      "material_path": "orange.json"
     },
     {
       "name": "test",
@@ -90,14 +86,7 @@
         "translation": [-2, 0, 0]
       },
       "mesh_path": "coors_system_test.obj",
-      "material_path": "orange.json",
-      "scene_object_script": {
-        "name": "rotate",
-        "args": {
-          "speed": 45,
-          "axis": "X"
-        }
-      }
+      "material_path": "orange.json"
     }
   ]
 }

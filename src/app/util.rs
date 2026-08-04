@@ -1,4 +1,4 @@
-use crate::app::scene::{SceneObject};
+use crate::app::scene::{SceneObject, Transform};
 use log::{debug, error, info, warn};
 use obj::{load_obj, Obj, Vertex};
 use std::collections::{btree_map, BTreeMap, HashMap};
@@ -8,6 +8,8 @@ use std::io::BufReader;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
+use glam::{Mat4, Quat, Vec3};
+use serde::Deserialize;
 use vulkano::buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo};
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
@@ -201,11 +203,11 @@ impl<T> DerefMut for InitOption<T> {
     }
 }
 
-pub fn radians_from_degrees(degrees: f32) -> f32 {
+pub fn rad_from_deg(degrees: f32) -> f32 {
     degrees * PI / 180.0
 }
 
-pub fn degrees_from_radians(radians: f32) -> f32 {
+pub fn deg_from_rad(radians: f32) -> f32 {
     radians / PI * 180.0
 }
 
@@ -397,5 +399,23 @@ pub fn get_sample_count(common_items: &CommonItems, samples: u32) -> SampleCount
         specified_sample_count
     } else {
         panic!("Unavailable number of samples")
+    }
+}
+
+pub struct GlobalTransformData {
+    pub transform: Transform,
+    pub forward: Vec3,
+    pub right: Vec3,
+    pub up: Vec3,
+}
+
+impl GlobalTransformData {
+    pub fn new(model_matrix: &Mat4) -> Self {
+        GlobalTransformData {
+            transform: Transform::new_from(model_matrix),
+            forward: model_matrix.transform_vector3(Vec3::Z),
+            right: model_matrix.transform_vector3(Vec3::X),
+            up: model_matrix.transform_vector3(Vec3::Y)
+        }
     }
 }

@@ -1,9 +1,11 @@
 use egui::Ui;
+use glam::Quat;
 use crate::app::AppApi;
 use crate::scripts::{convert_args, SceneObjectScript};
 use serde::Deserialize;
 use crate::app::scene::{SceneApi, SceneObject};
 use crate::app::ui::ControlUi;
+use crate::app::util::{rad_from_deg, GlobalTransformData};
 
 #[derive(Deserialize)]
 enum Axis {
@@ -14,6 +16,15 @@ enum Axis {
 struct Args {
     speed: f32,
     axis: Axis,
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        Args {
+            speed: 0.0,
+            axis: Axis::X,
+        }
+    }
 }
 
 pub struct Rotate {
@@ -30,20 +41,13 @@ impl Rotate {
 
 impl SceneObjectScript for Rotate {
 
-    fn frame_update(&mut self, cur_object: &mut SceneObject, app_api: &mut AppApi) {
-        let mut cur_rotation = match self.args.axis {
-            Axis::X => { cur_object.transform.rotation.x }
-            Axis::Y => { cur_object.transform.rotation.y }
-            Axis::Z => { cur_object.transform.rotation.z }
-        };
+    fn frame_update(&mut self, cur_object: &mut SceneObject, global_transform_data: &GlobalTransformData, app_api: &mut AppApi) {
+        let rad_diff = rad_from_deg(self.args.speed * app_api.timing_api.frame_duration);
 
-        cur_rotation += self.args.speed * app_api.timing_api.frame_duration;
-        cur_rotation = cur_rotation % 360.0;
-
-        match self.args.axis {
-            Axis::X => { cur_object.transform.rotation.x = cur_rotation }
-            Axis::Y => { cur_object.transform.rotation.y = cur_rotation }
-            Axis::Z => { cur_object.transform.rotation.z = cur_rotation }
+        cur_object.transform.rotation *= match self.args.axis {
+            Axis::X => { Quat::from_rotation_x(rad_diff) }
+            Axis::Y => { Quat::from_rotation_y(rad_diff) }
+            Axis::Z => { Quat::from_rotation_z(rad_diff) }
         }
     }
 }

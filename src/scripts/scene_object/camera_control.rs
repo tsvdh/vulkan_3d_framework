@@ -1,11 +1,15 @@
+use std::f32::consts::FRAC_PI_2;
 use egui::Ui;
+use glam::{Quat, Vec3};
 use crate::app::scene::{SceneApi, SceneObject};
 use crate::app::AppApi;
 use crate::scripts::{convert_args, SceneObjectScript};
 use serde::Deserialize;
+use winit::keyboard::KeyCode;
 use crate::app::ui::ControlUi;
+use crate::app::util::GlobalTransformData;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct Args {
 
 }
@@ -24,43 +28,42 @@ impl CameraControl {
 
 impl SceneObjectScript for CameraControl {
 
-    fn frame_update(&mut self, cur_object: &mut SceneObject, app_api: &mut AppApi)
+    fn frame_update(&mut self, cur_object: &mut SceneObject, global_transform_data: &GlobalTransformData, app_api: &mut AppApi)
     {
-        // let cur_object = app_api.scene_api.scene_objects.get_mut(cur_object_id);
-        //
-        // // camera controls
-        // // rotate 90 degrees (pi/2) in 1 sec
-        // // zoom 1m in 1 sec
-        //
-        // let mut vertical_angle_diff = FRAC_PI_2 * app_api.timing_api.frame_duration;
-        // let mut horizontal_angle_diff = FRAC_PI_2 * app_api.timing_api.frame_duration;
-        //
-        // let keys_down = app_api.logic_api.keys_down;
-        //
-        // if keys_down.contains(&ArrowDown) {
-        //     vertical_angle_diff *= -1.0;
-        // }
-        // if keys_down.contains(&ArrowLeft) {
-        //     horizontal_angle_diff *= -1.0;
-        // }
-        //
-        // let camera = &mut cur_object.transform;
-        //
-        // if keys_down.contains(&ArrowUp) || keys_down.contains(&ArrowDown) {
-        //     camera.translation = camera.translation.rotate_axis(camera.horizon, vertical_angle_diff);
-        // }
-        // if keys_down.contains(&ArrowLeft) || keys_down.contains(&ArrowRight) {
-        //     camera.translation = camera.translation.rotate_y(horizontal_angle_diff);
-        //     camera.horizon = camera.horizon.rotate_y(horizontal_angle_diff);
-        // }
-        //
-        // let mut distance_diff = 1.0 * app_api.timing_api.frame_duration;
-        // if keys_down.contains(&PageDown) {
-        //     distance_diff *= -1.0;
-        // }
-        // if keys_down.contains(&PageUp) || keys_down.contains(&PageDown) {
-        //     camera.translation += (Vec3::ZERO - camera.translation).normalize() * distance_diff;
-        // }
+        // camera controls
+        // rotate 90 degrees (pi/2) in 1 sec
+        // zoom 1m in 1 sec
+
+        let mut vertical_angle_diff = FRAC_PI_2 * app_api.timing_api.frame_duration;
+        let mut horizontal_angle_diff = FRAC_PI_2 * app_api.timing_api.frame_duration;
+
+        let keys_down = app_api.logic_api.keys_down;
+
+        if keys_down.contains(&KeyCode::ArrowDown) {
+            vertical_angle_diff *= -1.0;
+        }
+        if keys_down.contains(&KeyCode::ArrowLeft) {
+            horizontal_angle_diff *= -1.0;
+        }
+
+        let transform = &mut cur_object.transform;
+
+        if keys_down.contains(&KeyCode::ArrowUp) || keys_down.contains(&KeyCode::ArrowDown) {
+            transform.translation = transform.translation.rotate_axis(global_transform_data.right, vertical_angle_diff);
+        }
+        if keys_down.contains(&KeyCode::ArrowLeft) || keys_down.contains(&KeyCode::ArrowRight) {
+            transform.translation = transform.translation.rotate_y(horizontal_angle_diff);
+        }
+
+        let mut distance_diff = 1.0 * app_api.timing_api.frame_duration;
+        if keys_down.contains(&KeyCode::PageDown) {
+            distance_diff *= -1.0;
+        }
+        if keys_down.contains(&KeyCode::PageUp) || keys_down.contains(&KeyCode::PageDown) {
+            transform.translation += (Vec3::ZERO - transform.translation).normalize() * distance_diff;
+        }
+
+        transform.rotation = Quat::look_at_lh(transform.translation, Vec3::ZERO, Vec3::Y);
     }
 }
 

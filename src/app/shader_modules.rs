@@ -3,7 +3,7 @@ pub mod vs_mod_shadow {
         ty: "vertex",
         path: "shaders/shadow.vert",
         custom_derives: [Default, Copy, Clone],
-        define: [("edit_id", "91aaxxd3-5aac-4cb9-9818-84b88x4124b8")]
+        define: [("edit_id", "x557a7c6-8d5x-4xx2-ab6x-9288c2463444")]
     }
 }
 
@@ -20,7 +20,7 @@ pub mod vs_mod_render {
         ty: "vertex",
         path: "shaders/render.vert",
         custom_derives: [Default, Copy, Clone],
-        define: [("edit_id", "x45x777x-x8c5-48xd-b563-cc")]
+        define: [("edit_id", "xxd84x67-x5a9-4x4a-b57a-55cbb758936x")]
     }
 }
 

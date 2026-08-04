@@ -1,9 +1,9 @@
 use crate::app::shader_modules::fs_mod_render::{PhongMaterial, RenderFragmentData};
 use crate::app::shader_modules::vs_mod_render::RenderVertexData;
 use crate::app::shader_modules::vs_mod_shadow::ShadowVertexData;
-use crate::app::util::{CommonItems, MeshHolder, ObjectHolder};
-use crate::scripts::{get_instance_script, get_scene_object_script, InstanceScript, SceneObjectScript};
-use glam::Vec3;
+use crate::app::util::{CommonItems, MeshHolder, ObjectHolder, rad_from_deg};
+use crate::scripts::{InstanceScript, SceneObjectScript, get_instance_script, get_scene_object_script};
+use glam::{EulerRot, Mat4, Quat, Vec3};
 use serde::Deserialize;
 use std::env;
 use std::fs::File;
@@ -25,12 +25,18 @@ pub struct SceneItems {
 }
 
 #[derive(Deserialize, Clone)]
-pub struct Transform {
+pub struct TransformConfig {
     #[serde(default)]
     pub translation: Vec3,
     #[serde(default)]
     pub rotation: Vec3,
-    #[serde(default = "Transform::default_scale")]
+    #[serde(default = "TransformConfig::default_scale")]
+    pub scale: Vec3,
+}
+
+pub struct Transform {
+    pub translation: Vec3,
+    pub rotation: Quat,
     pub scale: Vec3,
 }
 
@@ -55,7 +61,7 @@ pub enum Light {
 pub struct SceneObjectConfig {
     pub name: String,
     #[serde(default)]
-    pub transform: Transform,
+    pub transform: TransformConfig,
 
     #[serde(default)]
     pub mesh_path: Option<String>,
@@ -98,6 +104,7 @@ pub struct SceneObject {
 #[derive(Deserialize)]
 pub struct ScriptConfig {
     name: String,
+    #[serde(default)]
     args: serde_json::Value,
 }
 
@@ -157,7 +164,7 @@ impl SceneItems {
 
             let mut scene_object = SceneObject {
                 name: scene_object_config.name.clone(),
-                transform: scene_object_config.transform.clone(),
+                transform: scene_object_config.transform.clone().into(),
                 camera: scene_object_config.camera.clone(),
                 light: scene_object_config.light.clone(),
                 ..Default::default()
@@ -202,7 +209,7 @@ impl SceneItems {
         }
     }
 
-    // todo! temporary until deferred rendering
+    // todo! temporary methods until deferred rendering
     pub fn get_camera(&self) -> &SceneObject {
         for (_, scene_object) in self.scene_objects.get_iter() {
             if let Some(camera) = scene_object.camera.as_ref() {
@@ -267,12 +274,44 @@ impl Default for Transform {
     fn default() -> Self {
         Transform {
             translation: Vec3::ZERO,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+        }
+    }
+}
+
+impl From<TransformConfig> for Transform {
+    fn from(value: TransformConfig) -> Self {
+        Transform {
+            translation: value.translation,
+            rotation: Quat::from_rotation_x(rad_from_deg(value.rotation.x))
+                    * Quat::from_rotation_y(rad_from_deg(value.rotation.y))
+                    * Quat::from_rotation_z(rad_from_deg(value.rotation.z)),
+            scale: value.scale
+        }
+    }
+}
+
+impl Transform {
+    pub fn new_from(mat: &Mat4) -> Self {
+        Transform {
+            translation: mat.transform_point3(Vec3::ZERO),
+            rotation: Quat::from_mat4(mat),
+            scale: mat.transform_vector3(Vec3::ONE)
+        }
+    }
+}
+
+impl Default for TransformConfig {
+    fn default() -> Self {
+        TransformConfig {
+            translation: Vec3::ZERO,
             rotation: Vec3::ZERO,
             scale: Vec3::ONE,
         }
     }
 }
-impl Transform {
+impl TransformConfig {
     fn default_scale() -> Vec3 { Vec3::ONE }
 }
 
