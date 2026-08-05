@@ -34,7 +34,7 @@ pub mod fs_mod_render {
         ty: "fragment",
         path: "shaders/render.frag",
         custom_derives: [Default, Copy, Clone, Deserialize],
-        define: [("edit_id", "xaac7xa7-9cxd-4dax-b7x6-2xx581c418a8")]
+        define: [("edit_id", "817b76c2-7713-46xx-ab54-6c3b4cd664xx")]
     }
 
     impl ControlUi for PhongComponent {

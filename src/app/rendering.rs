@@ -32,6 +32,7 @@ use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp, ResolveMode};
 use vulkano::swapchain::{acquire_next_image, PresentMode, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError};
+use winit::dpi::PhysicalSize;
 use winit::window::Window;
 use crate::app::Config;
 
@@ -215,10 +216,8 @@ impl RenderItems {
             extent: [SHADOW_MAP_EXTENT[0] as f32, SHADOW_MAP_EXTENT[1] as f32],
             ..Default::default()
         };
-        let render_viewport = Viewport {
-            extent: window.inner_size().into(),
-            ..Default::default()
-        };
+
+        let render_viewport= make_viewport(window.inner_size());
 
         let mut uniform_buffer_holder = UniformBufferHolder::new();
         let buf_alloc = common_items.uniform_buffer_allocator.clone();
@@ -288,7 +287,7 @@ impl RenderItems {
              self.color_attachment_image_view,
              self.depth_attachment_image_view,
              self.swapchain_image_views) = make_image_views(common_items, &new_images, self.sample_count);
-            self.render_viewport.extent = new_window_size.into();
+            self.render_viewport = make_viewport(new_window_size);
             self.recreate_swapchain = false;
         }
 
@@ -483,6 +482,16 @@ impl RenderItems {
                 warn!("Rendering failed: {error}");
             }
         }
+    }
+}
+
+fn make_viewport(window_size: PhysicalSize<u32>) -> Viewport {
+    let width = window_size.width as f32;
+    let height = window_size.height as f32;
+    Viewport {
+        extent: [width, -height],
+        offset: [0.0, height],
+        ..Default::default()
     }
 }
 

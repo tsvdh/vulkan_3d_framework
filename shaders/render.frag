@@ -63,7 +63,7 @@ float get_shadow(vec4 f_position_light_space, vec3 light_dir) {
           for (int y = grid_min; y <= grid_max; y++) {
 
                float shadow_map_depth = texture(shadow_map, proj_coords + vec2(x, y) * texel_size).x;
-               float bias = max(0.05 * (1 - dot(light_dir, f_normal)), 0.005);
+               float bias = max(0.001 * (1 - dot(light_dir, f_normal)), 0.005);
 
                shadow += point_depth <= (shadow_map_depth + bias) ? 1.0 : SHADOW_MIN;
           }

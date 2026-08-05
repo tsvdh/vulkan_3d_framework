@@ -16,7 +16,7 @@
     {
       "name": "Light",
       "transform": {
-        "rotation": [90, 0, 0]
+        "rotation": [60, 0, 0]
       },
       "light": {
         "type": "Directional",
@@ -73,19 +73,16 @@
       ]
     },
     {
-      "name": "bunny2",
-      "transform": {
-        "rotation": [0, 180, 0]
-      },
-      "mesh_path": "bunny_face_normals.obj",
+      "name": "test",
+      "mesh_path": "coors_system_test.obj",
       "material_path": "orange.json"
     },
     {
-      "name": "test",
+      "name": "bunny2",
       "transform": {
         "translation": [-2, 0, 0]
       },
-      "mesh_path": "coors_system_test.obj",
+      "mesh_path": "bunny_face_normals.obj",
       "material_path": "orange.json"
     }
   ]

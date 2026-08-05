@@ -87,10 +87,10 @@ impl LogicItems {
         Self::make_model_matrices(&mut scene_items.scene_objects, &mut model_matrices, Mat4::IDENTITY,
                                   scene_items.scene_tree_root_id);
 
-        Self::set_uniforms(scene_items, render_items, &mut model_matrices);
-
         let mut app_api = AppApi::new(self, scene_items, timing_items);
         Self::execute_scripts(&mut app_api, &mut model_matrices);
+
+        Self::set_uniforms(scene_items, render_items, &mut model_matrices);
 
         self.keys_pressed.clear();
     }
@@ -118,7 +118,7 @@ impl LogicItems {
         let model_camera_matrix = model_matrices.get(&camera_id).unwrap();
 
         let view_proj_light_matrix = make_proj_light_matrix(scene_items) * model_light_matrix.inverse();
-        let view_proj_camera_matrix = make_view_proj_camera_matrix(scene_items, render_items) * model_camera_matrix.inverse();
+        let view_proj_camera_matrix = make_proj_camera_matrix(scene_items, render_items) * model_camera_matrix.inverse();
 
         for (_, cur_scene_object) in scene_items.scene_objects.get_iter_mut()
         {
@@ -173,7 +173,7 @@ impl LogicItems {
     }
 }
 
-fn make_view_proj_camera_matrix(scene_items: &SceneItems, render_items: &RenderItems) -> Mat4 {
+fn make_proj_camera_matrix(scene_items: &SceneItems, render_items: &RenderItems) -> Mat4 {
     let camera =  scene_items.get_camera().camera.as_ref().unwrap();
 
     let image_extent = render_items.swapchain.image_extent();
@@ -185,14 +185,7 @@ fn make_view_proj_camera_matrix(scene_items: &SceneItems, render_items: &RenderI
         100.0
     );
 
-    
-    let view = Mat4::look_to_lh(
-        Vec3::ZERO,
-        Vec3::Z,
-        Vec3::NEG_Y
-    );
-
-    projection * view
+    projection
 }
 
 fn make_proj_light_matrix(scene_items: &SceneItems) -> Mat4 {

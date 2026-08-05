@@ -16,12 +16,14 @@ struct Args {
 
 pub struct CameraControl {
     args: Args,
+    center: Vec3,
 }
 
 impl CameraControl {
     pub fn new(args: serde_json::Value) -> Self {
         CameraControl {
-            args: convert_args(args)
+            args: convert_args(args),
+            center: Vec3::ZERO,
         }
     }
 }
@@ -42,7 +44,7 @@ impl SceneObjectScript for CameraControl {
         if keys_down.contains(&KeyCode::ArrowDown) {
             vertical_angle_diff *= -1.0;
         }
-        if keys_down.contains(&KeyCode::ArrowLeft) {
+        if keys_down.contains(&KeyCode::ArrowRight) {
             horizontal_angle_diff *= -1.0;
         }
 
@@ -62,8 +64,8 @@ impl SceneObjectScript for CameraControl {
         if keys_down.contains(&KeyCode::PageUp) || keys_down.contains(&KeyCode::PageDown) {
             transform.translation += (Vec3::ZERO - transform.translation).normalize() * distance_diff;
         }
-
-        transform.rotation = Quat::look_at_lh(transform.translation, Vec3::ZERO, Vec3::Y);
+        
+        transform.rotation = Quat::look_at_lh(transform.translation, self.center, Vec3::Y).inverse();
     }
 }
 
