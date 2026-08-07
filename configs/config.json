@@ -1,5 +1,6 @@
 {
   "show_frame_times": false,
   "resolution": [1500, 1000],
-  "multisample_samples": 4
+  "multisample_samples": 4,
+  "fps_limit": 60
 }

@@ -2925,7 +2925,7 @@ dependencies = [
 
 [[package]]
 name = "vulkan_3d_framework"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "codegen",
  "convert_case",

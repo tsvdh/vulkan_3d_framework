@@ -71,7 +71,7 @@ impl TimingItems {
     pub fn new(config: &Config) -> Self {
         let now = Instant::now();
 
-        let min_frame_duration = Duration::from_secs_f32(1.0 / 60.0);
+        let min_frame_duration = Duration::from_secs_f32(1.0 / config.fps_limit as f32);
         let mut frame_start_moments: VecDeque<Instant> = VecDeque::new();
         frame_start_moments.push_back(now - min_frame_duration);
         frame_start_moments.push_back(now);

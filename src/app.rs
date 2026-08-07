@@ -29,6 +29,7 @@ pub struct Config {
     pub resolution: [u32; 2],
     pub show_frame_times: bool,
     pub multisample_samples: u32,
+    pub fps_limit: u32,
 }
 
 pub struct App {
